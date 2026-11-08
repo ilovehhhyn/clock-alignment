@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clock-alignment"
+version = "0.1.0"
+description = "Budgeted, isolated social-deduction swarms with auditable experiments"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+plots = ["matplotlib>=3.9,<4"]
+
+[project.scripts]
+clock-alignment = "clock_alignment.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["clock_alignment*"]
+
+[tool.setuptools.package-data]
+"clock_alignment._vendor" = ["LICENSE"]
