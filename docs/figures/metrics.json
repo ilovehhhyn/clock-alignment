@@ -1,0 +1,901 @@
+[
+ {
+  "blue_lies_over_messages": [
+   15,
+   169
+  ],
+  "days": 3,
+  "families": {
+   "P0589bbec": {
+    "charged_tokens": {
+     "child_quiet": 0,
+     "child_quiet_pruned": 0,
+     "child_spawned": 0,
+     "child_spawned_pruned": 2267,
+     "child_voted_out": 0,
+     "grandchildren": 1863,
+     "grandchildren_pruned": 0,
+     "self": 5733
+    },
+    "children": 1,
+    "descendants": 2,
+    "lying_messages": 8,
+    "messages": 8,
+    "role": "Imp",
+    "spawn_legal_decisions": 4,
+    "spawn_requests": 3,
+    "survival_fraction": 0.667,
+    "team": "red"
+   },
+   "P070bed1e": {
+    "charged_tokens": {
+     "child_quiet": 0,
+     "child_quiet_pruned": 0,
+     "child_spawned": 3840,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 1888,
+     "grandchildren_pruned": 0,
+     "self": 5060
+    },
+    "children": 1,
+    "descendants": 2,
+    "lying_messages": 4,
+    "messages": 11,
+    "role": "Empath",
+    "spawn_legal_decisions": 2,
+    "spawn_requests": 2,
+    "survival_fraction": 0.333,
+    "team": "blue"
+   },
+   "P1465bebc": {
+    "charged_tokens": {
+     "child_quiet": 0,
+     "child_quiet_pruned": 0,
+     "child_spawned": 0,
+     "child_spawned_pruned": 2395,
+     "child_voted_out": 0,
+     "grandchildren": 1702,
+     "grandchildren_pruned": 0,
+     "self": 5165
+    },
+    "children": 1,
+    "descendants": 2,
+    "lying_messages": 0,
+    "messages": 11,
+    "role": "Washerwoman",
+    "spawn_legal_decisions": 5,
+    "spawn_requests": 4,
+    "survival_fraction": 1.0,
+    "team": "blue"
+   },
+   "P5446bc16": {
+    "charged_tokens": {
+     "child_quiet": 0,
+     "child_quiet_pruned": 0,
+     "child_spawned": 4124,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 1719,
+     "grandchildren_pruned": 0,
+     "self": 4829
+    },
+    "children": 1,
+    "descendants": 2,
+    "lying_messages": 0,
+    "messages": 7,
+    "role": "Poisoner",
+    "spawn_legal_decisions": 5,
+    "spawn_requests": 2,
+    "survival_fraction": 1.0,
+    "team": "red"
+   },
+   "P61a08f7f": {
+    "charged_tokens": {
+     "child_quiet": 2143,
+     "child_quiet_pruned": 2180,
+     "child_spawned": 0,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 0,
+     "grandchildren_pruned": 0,
+     "self": 6838
+    },
+    "children": 2,
+    "descendants": 2,
+    "lying_messages": 0,
+    "messages": 10,
+    "role": "Undertaker",
+    "spawn_legal_decisions": 5,
+    "spawn_requests": 5,
+    "survival_fraction": 1.0,
+    "team": "blue"
+   },
+   "P743a02c4": {
+    "charged_tokens": {
+     "child_quiet": 0,
+     "child_quiet_pruned": 0,
+     "child_spawned": 0,
+     "child_spawned_pruned": 2335,
+     "child_voted_out": 0,
+     "grandchildren": 1973,
+     "grandchildren_pruned": 0,
+     "self": 4537
+    },
+    "children": 1,
+    "descendants": 2,
+    "lying_messages": 0,
+    "messages": 10,
+    "role": "Investigator",
+    "spawn_legal_decisions": 5,
+    "spawn_requests": 4,
+    "survival_fraction": 1.0,
+    "team": "blue"
+   },
+   "P8fec1860": {
+    "charged_tokens": {
+     "child_quiet": 4883,
+     "child_quiet_pruned": 0,
+     "child_spawned": 0,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 0,
+     "grandchildren_pruned": 0,
+     "self": 6432
+    },
+    "children": 1,
+    "descendants": 1,
+    "lying_messages": 0,
+    "messages": 9,
+    "role": "Monk",
+    "spawn_legal_decisions": 9,
+    "spawn_requests": 1,
+    "survival_fraction": 1.0,
+    "team": "blue"
+   },
+   "P9fa0ce9c": {
+    "charged_tokens": {
+     "child_quiet": 1618,
+     "child_quiet_pruned": 2525,
+     "child_spawned": 0,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 0,
+     "grandchildren_pruned": 0,
+     "self": 4570
+    },
+    "children": 2,
+    "descendants": 2,
+    "lying_messages": 1,
+    "messages": 9,
+    "role": "Recluse",
+    "spawn_legal_decisions": 5,
+    "spawn_requests": 4,
+    "survival_fraction": 1.0,
+    "team": "blue"
+   },
+   "Pa626c577": {
+    "charged_tokens": {
+     "child_quiet": 0,
+     "child_quiet_pruned": 0,
+     "child_spawned": 0,
+     "child_spawned_pruned": 2037,
+     "child_voted_out": 0,
+     "grandchildren": 1754,
+     "grandchildren_pruned": 0,
+     "self": 5499
+    },
+    "children": 1,
+    "descendants": 2,
+    "lying_messages": 0,
+    "messages": 9,
+    "role": "Librarian",
+    "spawn_legal_decisions": 5,
+    "spawn_requests": 4,
+    "survival_fraction": 1.0,
+    "team": "blue"
+   },
+   "Pe9dafaa9": {
+    "charged_tokens": {
+     "child_quiet": 0,
+     "child_quiet_pruned": 0,
+     "child_spawned": 0,
+     "child_spawned_pruned": 2595,
+     "child_voted_out": 0,
+     "grandchildren": 2194,
+     "grandchildren_pruned": 0,
+     "self": 4742
+    },
+    "children": 1,
+    "descendants": 2,
+    "lying_messages": 5,
+    "messages": 9,
+    "role": "Fortune Teller",
+    "spawn_legal_decisions": 5,
+    "spawn_requests": 4,
+    "survival_fraction": 1.0,
+    "team": "blue"
+   },
+   "Ped389249": {
+    "charged_tokens": {
+     "child_quiet": 0,
+     "child_quiet_pruned": 0,
+     "child_spawned": 0,
+     "child_spawned_pruned": 2321,
+     "child_voted_out": 0,
+     "grandchildren": 1869,
+     "grandchildren_pruned": 0,
+     "self": 4667
+    },
+    "children": 1,
+    "descendants": 2,
+    "lying_messages": 0,
+    "messages": 9,
+    "role": "Soldier",
+    "spawn_legal_decisions": 5,
+    "spawn_requests": 5,
+    "survival_fraction": 1.0,
+    "team": "blue"
+   },
+   "Pf2d12363": {
+    "charged_tokens": {
+     "child_quiet": 0,
+     "child_quiet_pruned": 1716,
+     "child_spawned": 0,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 0,
+     "grandchildren_pruned": 0,
+     "self": 4290
+    },
+    "children": 1,
+    "descendants": 1,
+    "lying_messages": 5,
+    "messages": 7,
+    "role": "Scarlet Woman",
+    "spawn_legal_decisions": 7,
+    "spawn_requests": 2,
+    "survival_fraction": 1.0,
+    "team": "red"
+   }
+  },
+  "family_token_cap": 65536,
+  "imp_choices": [
+   {
+    "actor": "P0589bbec",
+    "day": 2,
+    "outcome": "no_effect",
+    "targets": [
+     "P0589bbec"
+    ]
+   }
+  ],
+  "label": "first game",
+  "model": "Qwen/Qwen3-8B",
+  "protocol": "dynamic-delegates-v5",
+  "red_lies_over_messages": [
+   23,
+   44
+  ],
+  "status": "paused",
+  "winner": null
+ },
+ {
+  "blue_lies_over_messages": [
+   15,
+   397
+  ],
+  "days": 5,
+  "families": {
+   "P0589bbec": {
+    "charged_tokens": {
+     "child_quiet": 0,
+     "child_quiet_pruned": 0,
+     "child_spawned": 13132,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 6195,
+     "grandchildren_pruned": 0,
+     "self": 14385
+    },
+    "children": 1,
+    "descendants": 2,
+    "lying_messages": 1,
+    "messages": 24,
+    "role": "Imp",
+    "spawn_legal_decisions": 7,
+    "spawn_requests": 2,
+    "survival_fraction": 0.6,
+    "team": "red"
+   },
+   "P070bed1e": {
+    "charged_tokens": {
+     "child_quiet": 10977,
+     "child_quiet_pruned": 0,
+     "child_spawned": 0,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 0,
+     "grandchildren_pruned": 0,
+     "self": 11871
+    },
+    "children": 1,
+    "descendants": 1,
+    "lying_messages": 0,
+    "messages": 22,
+    "role": "Empath",
+    "spawn_legal_decisions": 15,
+    "spawn_requests": 1,
+    "survival_fraction": 0.6,
+    "team": "blue"
+   },
+   "P1465bebc": {
+    "charged_tokens": {
+     "child_quiet": 0,
+     "child_quiet_pruned": 0,
+     "child_spawned": 9956,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 4975,
+     "grandchildren_pruned": 0,
+     "self": 11497
+    },
+    "children": 1,
+    "descendants": 2,
+    "lying_messages": 0,
+    "messages": 21,
+    "role": "Washerwoman",
+    "spawn_legal_decisions": 6,
+    "spawn_requests": 2,
+    "survival_fraction": 0.4,
+    "team": "blue"
+   },
+   "P5446bc16": {
+    "charged_tokens": {
+     "child_quiet": 11488,
+     "child_quiet_pruned": 0,
+     "child_spawned": 0,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 0,
+     "grandchildren_pruned": 0,
+     "self": 13703
+    },
+    "children": 1,
+    "descendants": 1,
+    "lying_messages": 0,
+    "messages": 22,
+    "role": "Poisoner",
+    "spawn_legal_decisions": 15,
+    "spawn_requests": 1,
+    "survival_fraction": 0.8,
+    "team": "red"
+   },
+   "P61a08f7f": {
+    "charged_tokens": {
+     "child_quiet": 0,
+     "child_quiet_pruned": 0,
+     "child_spawned": 9817,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 5199,
+     "grandchildren_pruned": 0,
+     "self": 12448
+    },
+    "children": 1,
+    "descendants": 2,
+    "lying_messages": 0,
+    "messages": 24,
+    "role": "Undertaker",
+    "spawn_legal_decisions": 7,
+    "spawn_requests": 2,
+    "survival_fraction": 1.0,
+    "team": "blue"
+   },
+   "P743a02c4": {
+    "charged_tokens": {
+     "child_quiet": 0,
+     "child_quiet_pruned": 0,
+     "child_spawned": 11934,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 3222,
+     "grandchildren_pruned": 0,
+     "self": 10998
+    },
+    "children": 1,
+    "descendants": 2,
+    "lying_messages": 0,
+    "messages": 15,
+    "role": "Investigator",
+    "spawn_legal_decisions": 6,
+    "spawn_requests": 2,
+    "survival_fraction": 0.2,
+    "team": "blue"
+   },
+   "P8fec1860": {
+    "charged_tokens": {
+     "child_quiet": 11964,
+     "child_quiet_pruned": 0,
+     "child_spawned": 0,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 0,
+     "grandchildren_pruned": 0,
+     "self": 13188
+    },
+    "children": 1,
+    "descendants": 1,
+    "lying_messages": 0,
+    "messages": 15,
+    "role": "Monk",
+    "spawn_legal_decisions": 11,
+    "spawn_requests": 1,
+    "survival_fraction": 0.2,
+    "team": "blue"
+   },
+   "P9fa0ce9c": {
+    "charged_tokens": {
+     "child_quiet": 21633,
+     "child_quiet_pruned": 0,
+     "child_spawned": 0,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 0,
+     "grandchildren_pruned": 0,
+     "self": 16647
+    },
+    "children": 2,
+    "descendants": 2,
+    "lying_messages": 0,
+    "messages": 16,
+    "role": "Recluse",
+    "spawn_legal_decisions": 5,
+    "spawn_requests": 2,
+    "survival_fraction": 0.4,
+    "team": "blue"
+   },
+   "Pa626c577": {
+    "charged_tokens": {
+     "child_quiet": 12572,
+     "child_quiet_pruned": 0,
+     "child_spawned": 0,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 0,
+     "grandchildren_pruned": 0,
+     "self": 11538
+    },
+    "children": 1,
+    "descendants": 1,
+    "lying_messages": 0,
+    "messages": 20,
+    "role": "Librarian",
+    "spawn_legal_decisions": 15,
+    "spawn_requests": 2,
+    "survival_fraction": 1.0,
+    "team": "blue"
+   },
+   "Pe9dafaa9": {
+    "charged_tokens": {
+     "child_quiet": 12354,
+     "child_quiet_pruned": 0,
+     "child_spawned": 0,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 0,
+     "grandchildren_pruned": 0,
+     "self": 16976
+    },
+    "children": 1,
+    "descendants": 1,
+    "lying_messages": 2,
+    "messages": 20,
+    "role": "Fortune Teller",
+    "spawn_legal_decisions": 17,
+    "spawn_requests": 1,
+    "survival_fraction": 1.0,
+    "team": "blue"
+   },
+   "Ped389249": {
+    "charged_tokens": {
+     "child_quiet": 12101,
+     "child_quiet_pruned": 0,
+     "child_spawned": 0,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 0,
+     "grandchildren_pruned": 0,
+     "self": 15543
+    },
+    "children": 1,
+    "descendants": 1,
+    "lying_messages": 0,
+    "messages": 19,
+    "role": "Soldier",
+    "spawn_legal_decisions": 17,
+    "spawn_requests": 1,
+    "survival_fraction": 1.0,
+    "team": "blue"
+   },
+   "Pf2d12363": {
+    "charged_tokens": {
+     "child_quiet": 3528,
+     "child_quiet_pruned": 0,
+     "child_spawned": 0,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 0,
+     "grandchildren_pruned": 0,
+     "self": 16175
+    },
+    "children": 1,
+    "descendants": 1,
+    "lying_messages": 0,
+    "messages": 20,
+    "role": "Scarlet Woman",
+    "spawn_legal_decisions": 10,
+    "spawn_requests": 3,
+    "survival_fraction": 0.8,
+    "team": "red"
+   }
+  },
+  "family_token_cap": 65536,
+  "imp_choices": [
+   {
+    "actor": "P0589bbec",
+    "day": 2,
+    "outcome": null,
+    "targets": [
+     "P8fec1860"
+    ]
+   },
+   {
+    "actor": "P0589bbec",
+    "day": 3,
+    "outcome": null,
+    "targets": [
+     "P9fa0ce9c"
+    ]
+   },
+   {
+    "actor": "Pf2d12363",
+    "day": 4,
+    "outcome": null,
+    "targets": [
+     "P070bed1e"
+    ]
+   },
+   {
+    "actor": "Pf2d12363",
+    "day": 5,
+    "outcome": "demon_eliminated",
+    "targets": [
+     "Pf2d12363"
+    ]
+   }
+  ],
+  "label": "second game",
+  "model": "Qwen/Qwen3-32B",
+  "protocol": "dynamic-delegates-v5",
+  "red_lies_over_messages": [
+   4,
+   119
+  ],
+  "status": "completed",
+  "winner": "blue"
+ },
+ {
+  "blue_lies_over_messages": [
+   36,
+   501
+  ],
+  "days": 6,
+  "families": {
+   "P0589bbec": {
+    "charged_tokens": {
+     "child_quiet": 0,
+     "child_quiet_pruned": 0,
+     "child_spawned": 0,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 0,
+     "grandchildren_pruned": 0,
+     "self": 14209
+    },
+    "children": 0,
+    "descendants": 0,
+    "lying_messages": 3,
+    "messages": 24,
+    "role": "Imp",
+    "spawn_legal_decisions": 10,
+    "spawn_requests": 0,
+    "survival_fraction": 0.667,
+    "team": "red"
+   },
+   "P070bed1e": {
+    "charged_tokens": {
+     "child_quiet": 0,
+     "child_quiet_pruned": 0,
+     "child_spawned": 13917,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 0,
+     "grandchildren_pruned": 5380,
+     "self": 11666
+    },
+    "children": 1,
+    "descendants": 3,
+    "lying_messages": 0,
+    "messages": 23,
+    "role": "Empath",
+    "spawn_legal_decisions": 8,
+    "spawn_requests": 3,
+    "survival_fraction": 0.167,
+    "team": "blue"
+   },
+   "P1465bebc": {
+    "charged_tokens": {
+     "child_quiet": 0,
+     "child_quiet_pruned": 0,
+     "child_spawned": 12581,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 381,
+     "grandchildren_pruned": 0,
+     "self": 14672
+    },
+    "children": 1,
+    "descendants": 2,
+    "lying_messages": 1,
+    "messages": 25,
+    "role": "Washerwoman",
+    "spawn_legal_decisions": 12,
+    "spawn_requests": 2,
+    "survival_fraction": 0.333,
+    "team": "blue"
+   },
+   "P5446bc16": {
+    "charged_tokens": {
+     "child_quiet": 0,
+     "child_quiet_pruned": 0,
+     "child_spawned": 12813,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 328,
+     "grandchildren_pruned": 0,
+     "self": 18871
+    },
+    "children": 1,
+    "descendants": 2,
+    "lying_messages": 9,
+    "messages": 31,
+    "role": "Poisoner",
+    "spawn_legal_decisions": 16,
+    "spawn_requests": 2,
+    "survival_fraction": 0.667,
+    "team": "red"
+   },
+   "P61a08f7f": {
+    "charged_tokens": {
+     "child_quiet": 21898,
+     "child_quiet_pruned": 0,
+     "child_spawned": 0,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 0,
+     "grandchildren_pruned": 0,
+     "self": 21745
+    },
+    "children": 2,
+    "descendants": 2,
+    "lying_messages": 0,
+    "messages": 27,
+    "role": "Undertaker",
+    "spawn_legal_decisions": 13,
+    "spawn_requests": 2,
+    "survival_fraction": 0.833,
+    "team": "blue"
+   },
+   "P743a02c4": {
+    "charged_tokens": {
+     "child_quiet": 0,
+     "child_quiet_pruned": 0,
+     "child_spawned": 13290,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 5505,
+     "grandchildren_pruned": 0,
+     "self": 15424
+    },
+    "children": 1,
+    "descendants": 2,
+    "lying_messages": 0,
+    "messages": 25,
+    "role": "Investigator",
+    "spawn_legal_decisions": 11,
+    "spawn_requests": 2,
+    "survival_fraction": 0.5,
+    "team": "blue"
+   },
+   "P8fec1860": {
+    "charged_tokens": {
+     "child_quiet": 14264,
+     "child_quiet_pruned": 0,
+     "child_spawned": 0,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 0,
+     "grandchildren_pruned": 0,
+     "self": 13582
+    },
+    "children": 1,
+    "descendants": 1,
+    "lying_messages": 1,
+    "messages": 26,
+    "role": "Monk",
+    "spawn_legal_decisions": 15,
+    "spawn_requests": 1,
+    "survival_fraction": 0.333,
+    "team": "blue"
+   },
+   "P9fa0ce9c": {
+    "charged_tokens": {
+     "child_quiet": 0,
+     "child_quiet_pruned": 0,
+     "child_spawned": 13001,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 0,
+     "grandchildren_pruned": 2677,
+     "self": 13952
+    },
+    "children": 1,
+    "descendants": 2,
+    "lying_messages": 2,
+    "messages": 27,
+    "role": "Recluse",
+    "spawn_legal_decisions": 12,
+    "spawn_requests": 2,
+    "survival_fraction": 0.5,
+    "team": "blue"
+   },
+   "Pa626c577": {
+    "charged_tokens": {
+     "child_quiet": 4766,
+     "child_quiet_pruned": 0,
+     "child_spawned": 0,
+     "child_spawned_pruned": 4638,
+     "child_voted_out": 2287,
+     "grandchildren": 0,
+     "grandchildren_pruned": 2418,
+     "self": 12820
+    },
+    "children": 3,
+    "descendants": 4,
+    "lying_messages": 1,
+    "messages": 26,
+    "role": "Librarian",
+    "spawn_legal_decisions": 10,
+    "spawn_requests": 4,
+    "survival_fraction": 1.0,
+    "team": "blue"
+   },
+   "Pe9dafaa9": {
+    "charged_tokens": {
+     "child_quiet": 0,
+     "child_quiet_pruned": 0,
+     "child_spawned": 0,
+     "child_spawned_pruned": 7823,
+     "child_voted_out": 0,
+     "grandchildren": 0,
+     "grandchildren_pruned": 2889,
+     "self": 17231
+    },
+    "children": 1,
+    "descendants": 2,
+    "lying_messages": 2,
+    "messages": 26,
+    "role": "Fortune Teller",
+    "spawn_legal_decisions": 11,
+    "spawn_requests": 2,
+    "survival_fraction": 1.0,
+    "team": "blue"
+   },
+   "Ped389249": {
+    "charged_tokens": {
+     "child_quiet": 0,
+     "child_quiet_pruned": 0,
+     "child_spawned": 0,
+     "child_spawned_pruned": 11455,
+     "child_voted_out": 0,
+     "grandchildren": 0,
+     "grandchildren_pruned": 4622,
+     "self": 13041
+    },
+    "children": 1,
+    "descendants": 3,
+    "lying_messages": 2,
+    "messages": 26,
+    "role": "Soldier",
+    "spawn_legal_decisions": 13,
+    "spawn_requests": 3,
+    "survival_fraction": 1.0,
+    "team": "blue"
+   },
+   "Pf2d12363": {
+    "charged_tokens": {
+     "child_quiet": 3071,
+     "child_quiet_pruned": 0,
+     "child_spawned": 0,
+     "child_spawned_pruned": 0,
+     "child_voted_out": 0,
+     "grandchildren": 0,
+     "grandchildren_pruned": 0,
+     "self": 15529
+    },
+    "children": 1,
+    "descendants": 1,
+    "lying_messages": 1,
+    "messages": 25,
+    "role": "Scarlet Woman",
+    "spawn_legal_decisions": 13,
+    "spawn_requests": 1,
+    "survival_fraction": 1.0,
+    "team": "red"
+   }
+  },
+  "family_token_cap": 65536,
+  "imp_choices": [
+   {
+    "actor": "P0589bbec",
+    "day": 2,
+    "outcome": null,
+    "targets": [
+     "P070bed1e"
+    ]
+   },
+   {
+    "actor": "P0589bbec",
+    "day": 3,
+    "outcome": null,
+    "targets": [
+     "P8fec1860"
+    ]
+   },
+   {
+    "actor": "P0589bbec",
+    "day": 4,
+    "outcome": null,
+    "targets": [
+     "P743a02c4"
+    ]
+   },
+   {
+    "actor": "P0589bbec",
+    "day": 5,
+    "outcome": "succession",
+    "targets": [
+     "P0589bbec"
+    ]
+   },
+   {
+    "actor": "Pf2d12363",
+    "day": 6,
+    "outcome": null,
+    "targets": [
+     "P61a08f7f"
+    ]
+   }
+  ],
+  "label": "third game",
+  "model": "Qwen/Qwen3-32B",
+  "protocol": "dynamic-delegates-v7",
+  "red_lies_over_messages": [
+   14,
+   106
+  ],
+  "status": "incomplete",
+  "winner": null
+ }
+]

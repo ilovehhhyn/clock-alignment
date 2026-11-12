@@ -36,16 +36,27 @@ python3 -m clock_alignment run --out runs/pilot --seed 7 --allow-paid
 
 Use `--resume` to continue an existing run with the same frozen code and provider; do not reuse its output directory for a new condition.
 
+A paid game plays until a team wins; add `--max-days N` to announce a fixed final day instead.
+
+## Local pilot on Della
+
+`local` plays the same prompts and rules against a vLLM profile (`--model`: Qwen3-4B-Instruct-2507, or Qwen3-8B and Qwen3-32B with thinking off) served on the job's own node. [scripts/della/pilot-link.sh](scripts/della/pilot-link.sh) runs one resumable link of under an hour; [scripts/della/submit-chain.sh](scripts/della/submit-chain.sh) queues several links for one game, with `ACCOUNT`, `QOS`, `MODEL`, `LINK_MINUTES`, `MAX_INPUT_TOKENS`, `FAMILY_TOKENS`, `ROPE_FACTOR`, `GPUS` (the job's GPUs and the server's tensor parallel size), `MEM` and `CONSTRAINT` as environment variables:
+
+```sh
+scripts/della/submit-chain.sh /scratch/gpfs/ARORA/hh9077/clock-runs/pilot-2day 2 4
+```
+
 The initial candidate is **GPT-6.1 Sol, medium reasoning**. Its public ClocktowerBench combined rating was 1,734, with a 90% interval of 1,684–1,815. This supports trying it; it does not establish competence in this modified game. See [sources and model choice](docs/SOURCES.md).
 
 | Guard | Default |
 |---|---|
-| Original players | 12; 9 Good and 3 Evil |
+| Original players | 12; 9 blue and 3 red (players never read the words good or evil) |
 | Family generation allowance | 32,768 output tokens, including reasoning, shared by an original and all descendants |
 | Delegates | At most 2 living per family; 1 birth per family per night; depth at most 3 |
+| Spoken allowance | 512 tokens of say or whisper per agent per session (four sessions a day); a longer message is cut at the cap and marked. Choices and private notes count only against the family allowance |
 | Paid generation requests | At most 1,500, including probes, analysis and failed/unknown attempts |
 | Per-request limits | 48,000 input tokens and 4,096 output tokens |
-| Total spend guard | $90; conservative reservation before every generation request |
+| Total spend guard | $90; conservative reservation before every generation request. Gameplay stops at $50 |
 
 At the verified standard rates, the full game output pool costs at most $3.93216 and the separate analysis output pool at most $0.24576. Repeated inputs can cost much more. Before each generation request, the runner reserves the maximum 48,000-token input plus the permitted output, using $2.50/M input and $10/M output. **The $90 guard stops further calls before reserved charges exceed the ceiling.** Completed calls retain conservative charges for actual usage; unknown calls retain their full reservation. This does not guarantee that every game finishes. The explicit 30-minute cache policy, standard tier, configured model and public API endpoint are part of the price assumptions.
 
@@ -57,6 +68,16 @@ python3 -m clock_alignment judge --out runs/pilot --request-id REQUEST_ID --allo
 ```
 
 Select a real saved request ID for the judge; it does not run against the whole transcript implicitly. All analysis shares the original run's cost and call ceilings.
+
+## Behaviour figures from saved games
+
+[docs/RESULTS.md](docs/RESULTS.md) tells what games 3 to 5 showed; its figures are built from probe copies of the runs:
+
+```bash
+/usr/bin/python3 scripts/plot_games.py --out docs/figures "game 3=PROBE_DIR_3" "game 4=PROBE_DIR_4" "game 5=PROBE_DIR_5"
+```
+
+[scripts/game_metrics.py](scripts/game_metrics.py) computes lie rates (claims scored against the speaker's own card, team list and reported beliefs by [scripts/lie_detector.py](scripts/lie_detector.py)), births, charged tokens by family member and survival; [scripts/draw_characters.py](scripts/draw_characters.py) draws the twelve-character card. The plotting scripts need matplotlib, which on this machine lives under `/usr/bin/python3`; the metrics and their tests need only the standard library.
 
 ## Read before interpreting a game
 
