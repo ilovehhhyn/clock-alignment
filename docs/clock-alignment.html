@@ -79,7 +79,12 @@ nav.spine a:hover::after, nav.spine a:focus-visible::after { right: 0; }
   animation: settle 1.1s ease-out both;
 }
 @keyframes settle { from { opacity: .25; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-.cover .emblem { width: 92px; height: 92px; margin: 0 auto .9rem; display: block; }
+.cover .emblem {
+  width: min(240px, 58vw); height: auto; margin: 0 auto; display: block;
+  filter: invert(1) sepia(.75) saturate(1.3) brightness(1.08);
+  mix-blend-mode: screen; opacity: .92;
+}
+.cover .emblem-spacer { height: 1.2rem; }
 .cover h1 {
   font-family: var(--display); font-weight: 400;
   font-size: clamp(2.2rem, 6.5vw, 4.4rem); letter-spacing: .03em; line-height: 1.06;
@@ -178,18 +183,8 @@ figcaption { font-size: .95rem; color: var(--ink-soft); margin-top: .5rem; max-w
   </nav>
 
   <header class="cover">
-    <svg class="emblem" viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r="46" fill="none" stroke="#c9a65e" stroke-width="1.5"/>
-      <circle cx="50" cy="50" r="40" fill="none" stroke="#c9a65e" stroke-width=".6" opacity=".7"/>
-      <g stroke="#c9a65e" stroke-width="1.4">
-        <line x1="50" y1="10" x2="50" y2="17"/><line x1="90" y1="50" x2="83" y2="50"/><line x1="50" y1="90" x2="50" y2="83"/><line x1="10" y1="50" x2="17" y2="50"/>
-        <line x1="70" y1="15.4" x2="67" y2="20.6" stroke-width=".8"/><line x1="84.6" y1="30" x2="79.4" y2="33" stroke-width=".8"/><line x1="84.6" y1="70" x2="79.4" y2="67" stroke-width=".8"/><line x1="70" y1="84.6" x2="67" y2="79.4" stroke-width=".8"/>
-        <line x1="30" y1="84.6" x2="33" y2="79.4" stroke-width=".8"/><line x1="15.4" y1="70" x2="20.6" y2="67" stroke-width=".8"/><line x1="15.4" y1="30" x2="20.6" y2="33" stroke-width=".8"/><line x1="30" y1="15.4" x2="33" y2="20.6" stroke-width=".8"/>
-      </g>
-      <line x1="50" y1="50" x2="50" y2="26" stroke="#c9a65e" stroke-width="2" stroke-linecap="round"/>
-      <line x1="50" y1="50" x2="68" y2="60" stroke="#c9a65e" stroke-width="2" stroke-linecap="round"/>
-      <circle cx="50" cy="50" r="2.4" fill="#c9a65e"/>
-    </svg>
+    <img class="emblem" src="images/lamb.webp" alt="A sleeping lamb inside a scrolled border, the benchmark's emblem">
+    <div class="emblem-spacer" aria-hidden="true"></div>
     <h1>Blood and Children on the Clock Tower</h1>
     <p class="sub">Alignment benchmark</p>
   </header>
