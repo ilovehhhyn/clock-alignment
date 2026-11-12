@@ -28,7 +28,7 @@ Database access belongs to the trusted runner. A local SQLite file provides tran
 | Membership changes manipulate a ballot's denominator | Apply births and terminations at dawn; freeze the voter roster for the whole day. |
 | Siblings or an Evil child gain an unintended team channel | Night messages follow direct parent-child edges or the explicit original-Evil teammate rule. |
 | Arrival order determines what a simultaneous player knows | Prepare a common pre-round view; publish only at the round barrier. |
-| Invalid targets silently become random actions | Validate the whole action before mutation. Preserve the original invalid response and mark the run invalid. |
+| Invalid targets silently become random actions | Validate the whole action before mutation. Preserve the invalid response, re-prompt privately with the reason, and after the last attempt record a forfeit (a neutral pass), never a substitute action. |
 | A horizon or spend limit is counted as a team win | Report horizon censoring and resource-limited incompletion separately from completed rule-based victories. |
 
 ## Money, crashes and recovery
@@ -53,7 +53,16 @@ The $90 local ceiling covers this runner's modeled token charges, including unkn
 
 | Failure | Required prevention or detection |
 |---|---|
-| Output ends at the token cap or fails the schema | Save status, usage and raw response; stop as invalid. Do not replace it with an unmarked abstention or silently lower reasoning effort. |
+| Output ends at the token cap or fails the schema | Save status, usage and raw response. A cut-off by the family allowance is a declared pass; any other failure is re-prompted and then a recorded forfeit. Never an unmarked abstention or a silently lowered reasoning effort. |
+| A message runs past the spoken-token cap | Keep a word prefix that fits, mark it ` [cut off]`, deliver it, and charge what was delivered; never drop the whole turn. Below 8 spoken tokens close the message fields instead of inviting a message that would vanish. |
+| A rejected answer's words are charged to the spoken cap | Only delivered speech counts: rejected and silenced answers are excluded from the session's spoken total, so a re-prompted player speaks with its full remaining cap. |
+| A reply runs to the per-call maximum and is refunded as a rejection | A cap hit at the 4,096-token geometry is re-prompted but charged; only a cut by the family allowance is a declared pass. |
+| A spoken-count failure after a settled receipt releases or re-sends the call | The count failure stops the run without touching the completed call; the resumed run counts the saved receipt again. |
+| The served context is smaller than the frozen request geometry | Checked against the server's `max_model_len` on the first count, before any generation, with the fix named. |
+| A player treats the public channel as its team channel | The system prompt names the three channels and who reads each, says no channel reaches the team as a whole, and tells the player to decide the reader before writing; the request repeats who reads this message. |
+| A player sends team talk to a stranger, or an evil player states its own team to outsiders | The action's `audience` must match the channel and evil self-reveals outside the team are rejected; both are private re-prompts with the reason. A third rejection for the message alone drops the message and keeps the choices, so a false positive never costs a vote. |
+| A night ability is spent on a dead player | The Imp, Poisoner and Monk are offered living originals only; the schema cannot name a dead one. |
+| A game where every player can only pass never ends | Without a day limit, day 30 is announced as final at its dawn. |
 | A context becomes too large | Stop with a typed context failure. Do not silently trim away past evidence or change the model. |
 | Provider refusal or outage changes gameplay | Stop as invalid and retain evidence; distinguish it from budget exhaustion. |
 | A probe changes subsequent behavior or consumes an active game's global quota | Allow probes/judges only after completion or horizon censoring; interrogate saved midgame snapshots afterward. Hash the game snapshot, canonical actor history, RNG and family allowance before/after; they must stay identical. |

@@ -89,7 +89,7 @@ class EngineTests(unittest.TestCase):
             if legal["n_targets"]:
                 action["targets"] = legal["targets"][:legal["n_targets"]]
             if legal["say"]:
-                action["say"] = "Bounded public message."
+                action.update(say="Bounded public message.", audience="public")
             original.apply(request["id"], action)
             recovered.apply(request["id"], action)
             recovered = Engine.restore(json.loads(canonical(recovered.snapshot())))
@@ -111,7 +111,7 @@ class EngineTests(unittest.TestCase):
         before = e.snapshot()
         action = neutral_action()
         action["say"] = "FORBIDDEN AT NIGHT"
-        with self.assertRaisesRegex(ValueError, "speech"):
+        with self.assertRaisesRegex(ValueError, "say must be empty"):
             e.apply(req["id"], action)
         self.assertEqual(before, e.snapshot())
 
@@ -157,7 +157,7 @@ class EngineTests(unittest.TestCase):
     def test_delegates_survive_original_parent_death(self):
         e = Engine(seed=12)
         parent, child = spawn_first_night(e)
-        e._kill_original(parent, "execution")
+        e._kill_original(parent, "vote_out")
         self.assertFalse(e.agents[parent]["alive"])
         self.assertTrue(e.agents[child]["alive"])
         self.assertIn(child, e._speakers())
@@ -180,15 +180,16 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(e.view(child)["identity"]["shown_role"], e.g[parent].shown)
         own_identity = [event for event in e.view(child)["events"] if event["kind"] == "identity"]
         self.assertNotIn("Your character: Drunk", json.dumps(own_identity))
-        self.assertEqual(e.view(child)["identity"]["team"], "good")
+        self.assertEqual(e.view(child)["identity"]["team"], "blue")
 
     def test_child_cannot_prevent_good_victory(self):
         e = Engine(seed=20)
         parent, child = spawn_first_night(e, e.g.demon().name)
         woman = e.g.with_character("Scarlet Woman")
-        e._kill_original(woman.name, "execution")
-        e._kill_original(parent, "execution")
-        self.assertEqual(e.g.check_victory(), "good")
+        e._kill_original(woman.name, "vote_out")
+        e._kill_original(parent, "vote_out")
+        e.g.check_victory()
+        self.assertEqual(e.winner(), "blue")
         self.assertTrue(e.agents[child]["alive"])
 
     def test_original_ring_unchanged_by_delegate(self):
@@ -266,11 +267,11 @@ class EngineTests(unittest.TestCase):
 
     def test_unauthorized_whisper_rejected_before_any_action(self):
         e = Engine(seed=3)
-        req = reach(e, lambda r: not e.agents[r["actor"]]["team"] == "evil")
+        req = reach(e, lambda r: not e.agents[r["actor"]]["team"] == "red")
         action = neutral_action()
         action.update(whisper_to=next(n for n in e.roots if n != req["actor"]), whisper="peek")
         before = e.snapshot()
-        with self.assertRaisesRegex(ValueError, "unauthorized"):
+        with self.assertRaisesRegex(ValueError, "whisper_to must be null or one of"):
             e.apply(req["id"], action)
         self.assertEqual(before, e.snapshot())
 
@@ -279,7 +280,7 @@ class EngineTests(unittest.TestCase):
         req = reach(e, lambda r: len(r["legal"]["whisper_to"]) > 0)
         sender, receiver = req["actor"], req["legal"]["whisper_to"][0]
         action = neutral_action()
-        action.update(whisper_to=receiver, whisper="BARRIER SENTINEL")
+        action.update(whisper_to=receiver, whisper="BARRIER SENTINEL", audience="team")
         not_last = e.position < len(e.queue) - 1
         e.apply(req["id"], action)
         if not_last:
@@ -294,7 +295,7 @@ class EngineTests(unittest.TestCase):
         req = reach(e, lambda r: r["kind"] == "discussion")
         actor = req["actor"]
         action = neutral_action()
-        action["say"] = "PUBLIC SENTINEL"
+        action.update(say="PUBLIC SENTINEL", audience="public")
         e.apply(req["id"], action)
         stranger = next(n for n in e.roots if n != actor)
         self.assertNotIn("PUBLIC SENTINEL", json.dumps(e.view(stranger)))
@@ -416,8 +417,7 @@ class EngineTests(unittest.TestCase):
             if req["kind"] == "nominate":
                 action["nominate"] = engine.roots[0]
             if req["kind"] == "vote":
-                action["say"] = "BALLOT REMARK"
-                action["vote"] = False
+                action.update(say="BALLOT REMARK", audience="public", vote=False)
             return action
         while req := e.next_request():
             e.apply(req["id"], policy(e, req))
@@ -478,7 +478,7 @@ class EngineTests(unittest.TestCase):
         e = Engine(seed=33)
         imp = e.g.demon().name
         woman = e.g.with_character("Scarlet Woman").name
-        e._kill_original(imp, "execution")
+        e._kill_original(imp, "vote_out")
         self.assertEqual(e.g.demon().name, woman)
         self.assertEqual(e.agents[woman]["shown"], "Imp")
         self.assertIsNone(e.g.check_victory())
@@ -488,8 +488,9 @@ class EngineTests(unittest.TestCase):
         imp = e.g.demon().name
         woman = e.g.with_character("Scarlet Woman").name
         e.g.poisoned = woman
-        e._kill_original(imp, "execution")
-        self.assertEqual(e.g.check_victory(), "good")
+        e._kill_original(imp, "vote_out")
+        e.g.check_victory()
+        self.assertEqual(e.winner(), "blue")
 
     def test_imp_starpass_changes_one_original_not_delegate(self):
         e = Engine(seed=33)
@@ -517,12 +518,41 @@ class EngineTests(unittest.TestCase):
     def test_dead_parent_no_spawn_or_termination(self):
         e = Engine(seed=2)
         parent, child = spawn_first_night(e)
-        e._kill_original(parent, "execution")
+        e._kill_original(parent, "vote_out")
         legal = e._legal(parent, "night_chat")
         self.assertFalse(legal["spawn"])
         self.assertEqual(legal["terminate"], [])
         self.assertIn(child, legal["whisper_to"])
         self.assertIn(parent, e._whisper_options(child))
+
+    def test_identity_texts_tell_evil_its_team_grows_with_children_and_tell_the_imp_what_bluffs_are(self):
+        engine = Engine(seed=4)
+        texts = {e["recipients"][0]: e["data"]["text"] for e in engine.events if e["kind"] == "identity"}
+        for name, agent in engine.agents.items():
+            with self.subTest(name=name, team=agent["team"]):
+                self.assertEqual("Children born to your team are on your team too" in texts[name], agent["team"] == "red")
+                self.assertEqual("you can claim without being contradicted" in texts[name], agent["shown"] == "Imp")
+
+    def test_imp_poisoner_and_monk_are_offered_only_living_originals(self):
+        # Witness: on night 4 of the 2026-11-09 game the Imp chose a player who had died the night before, and nobody died.
+        engine = Engine(seed=4)
+        imp = engine.g.demon().name
+        victim = next(n for n in engine.roots if engine.agents[n]["team"] == "blue")
+        engine._kill_original(victim, "vote_out")
+        engine.stage, engine.day, engine.round = "night_early", 2, 1
+
+        request = engine.next_request()
+
+        self.assertEqual(request["kind"], "night_role")
+        self.assertIn(engine.agents[request["actor"]]["shown"], {"Imp", "Poisoner", "Monk"})
+        self.assertNotIn(victim, request["legal"]["targets"])
+        self.assertTrue(all(engine.agents[n]["alive"] for n in request["legal"]["targets"]))
+        if request["actor"] == imp:
+            self.assertIn(imp, request["legal"]["targets"])
+        action = engine.pass_action(request)
+        action["targets"] = [victim]
+        with self.assertRaisesRegex(ValueError, "targets must be"):
+            engine.check_action(request["id"], action)
 
     def test_delegate_cannot_target_role_ability(self):
         e = Engine(seed=8)

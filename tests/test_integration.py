@@ -48,7 +48,7 @@ class IntegrationTests(unittest.TestCase):
                 store.initialize(config, 8, engine, "scripted")
                 family = engine.roots[0]
                 balance = store.daily_balance(family, 1)
-                store.reserve("private-child-output", "game", family, family, 4096, {})
+                store.reserve("private-child-output", "game", family, family, config.max_output_tokens, {}, "day-1:night", 512)
                 store.finish("private-child-output", {"usage": {"input_tokens": 100, "output_tokens": 900}}, .1)
                 self.assertEqual(store.daily_balance(family, 1), balance)
                 self.assertEqual(store.remaining(family), config.family_tokens - 900)
@@ -130,16 +130,25 @@ class IntegrationTests(unittest.TestCase):
             self.assertIsNone(result["winner"])
             self.assertEqual(report(tmp)["game"]["status"], "incomplete")
 
-    def test_provider_schema_error_is_invalid_not_gameplay_pass(self):
+    def test_an_always_malformed_agent_is_reprompted_then_forfeits_every_action(self):
+        real_act = ScriptedProvider.act
+
+        def malformed(provider, *args, **kwargs):
+            real_act(provider, *args, **kwargs)  # records the call, as every real provider does
+            return {"spawn": True}
+
         with tempfile.TemporaryDirectory() as tmp:
-            with patch.object(ScriptedProvider, "act", return_value={"spawn": True}):
-                result = run(tmp)
-            self.assertEqual(result["status"], "invalid")
+            with patch.object(ScriptedProvider, "act", malformed):
+                result = run(tmp, config=Config(max_days=1))
+            self.assertEqual(result["status"], "censored")
             self.assertIsNone(result["winner"])
-            self.assertEqual(report(tmp)["game"]["status"], "invalid")
             store = Store(tmp)
             try:
-                self.assertEqual(store.db.execute("SELECT COUNT(*) FROM decisions").fetchone()[0], 0)
+                modes = {r[0] for r in store.db.execute("SELECT mode FROM decisions")}
+                decisions = store.db.execute("SELECT COUNT(*) FROM decisions").fetchone()[0]
+                retries = store.db.execute("SELECT COUNT(*) FROM faults WHERE category='agent_retry'").fetchone()[0]
+                self.assertEqual(modes, {"forfeit"})
+                self.assertEqual(retries, decisions * Config().max_action_attempts)
             finally:
                 store.close()
 

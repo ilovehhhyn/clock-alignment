@@ -11,8 +11,19 @@ from pathlib import Path
 import sqlite3
 import time
 
-from .config import (Config, INPUT_NANO_PER_TOKEN, NANODOLLARS,
-                     OUTPUT_NANO_PER_TOKEN, canonical, digest)
+from .config import Config, NANODOLLARS, canonical, digest
+
+# Standard uncached Sol input, used only for the informational estimate beside the
+# conservative charge; reservations always use the profile's conservative input price.
+SOL_UNCACHED_INPUT_NANO_PER_TOKEN = 2_000
+SOL_CACHED_INPUT_NANO_PER_TOKEN = 100
+# Marks a settled call whose answer the Storyteller rejected; its whole output is exempt from allowances.
+REJECTED_ANSWER = "rejected answer"
+# Marks a settled call whose choices were applied without its message; only its speech is uncounted.
+SPEECH_FORFEITED = "speech forfeited"
+# Marks a settled call whose answer the Storyteller's confirmation check replaced; its whole output is exempt.
+SUPERSEDED = "superseded by confirmation"
+UNDELIVERED = (REJECTED_ANSWER, SPEECH_FORFEITED, SUPERSEDED)
 
 
 class BudgetLimit(RuntimeError):
@@ -47,9 +58,9 @@ class Store:
         self.db.execute("PRAGMA busy_timeout=15000")
         self.db.executescript("""
           CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
-          CREATE TABLE IF NOT EXISTS families(id TEXT PRIMARY KEY, token_cap INTEGER NOT NULL);
+          CREATE TABLE IF NOT EXISTS families(id TEXT PRIMARY KEY, token_cap INTEGER);
           CREATE TABLE IF NOT EXISTS daily_balances(
-            family TEXT NOT NULL, day INTEGER NOT NULL, tokens INTEGER NOT NULL,
+            family TEXT NOT NULL, day INTEGER NOT NULL, tokens INTEGER,
             PRIMARY KEY(family,day));
           CREATE TABLE IF NOT EXISTS checkpoints(
             seq INTEGER PRIMARY KEY, parent_hash TEXT NOT NULL, hash TEXT NOT NULL,
@@ -63,7 +74,8 @@ class Store:
             reservation_nano INTEGER NOT NULL, charge_nano INTEGER NOT NULL,
             request_json TEXT NOT NULL, response_json TEXT, output_tokens INTEGER,
             input_tokens INTEGER, reasoning_tokens INTEGER, elapsed REAL, error TEXT,
-            created REAL NOT NULL);
+            created REAL NOT NULL, session TEXT, exempt_tokens INTEGER,
+            message_cap INTEGER, message_tokens INTEGER);
           CREATE TABLE IF NOT EXISTS decisions(
             id TEXT PRIMARY KEY REFERENCES intents(id), action_json TEXT NOT NULL,
             call_id TEXT REFERENCES calls(id), mode TEXT NOT NULL, created REAL NOT NULL);
@@ -119,7 +131,7 @@ class Store:
                 raise FileExistsError("Experiment already exists; resume it explicitly")
             metadata = {"config": config.to_dict(), "seed": seed, "provider": provider,
                         "code_fingerprint": code_fingerprint(), "created": time.time(),
-                        "schema_version": 1}
+                        "schema_version": 3}
             for key, value in metadata.items():
                 self.db.execute("INSERT INTO meta VALUES (?,?)", (key, canonical(value)))
             for root in engine.roots:
@@ -188,18 +200,72 @@ class Store:
                             (request_id, canonical(action), call_id, mode, time.time()))
             self._checkpoint(snapshot, request_id)
 
-    def commit_terminal(self, snapshot):
+    def commit_snapshot(self, snapshot):
+        """Append a checkpoint for state reached without a new decision (a terminal or a declaration)."""
         with self.transaction():
             if digest(self.checkpoint()) != digest(snapshot):
                 self._checkpoint(snapshot, None)
 
+    # Charged tokens: settled output minus its exempt tokens (the judge-log refund, or all of a
+    # rejected answer), nothing for a released free call, or the full hold while a call is unsettled.
+    CHARGED = ("COALESCE(SUM(CASE WHEN status='completed' THEN output_tokens - COALESCE(exempt_tokens,0) "
+               "WHEN status='released' THEN 0 ELSE output_cap END),0)")
+
     def remaining(self, family):
+        """Return the lineage's uncharged tokens, or None when family allocations are off."""
         cap = self.db.execute("SELECT token_cap FROM families WHERE id=?", (family,)).fetchone()
         if not cap:
             raise IntegrityError("Unknown lineage")
-        used = self.db.execute("SELECT COALESCE(SUM(CASE WHEN status='completed' THEN output_tokens "
-                               "ELSE output_cap END),0) FROM calls WHERE scope='game' AND family=?", (family,)).fetchone()[0]
+        if cap[0] is None:
+            return None
+        used = self.db.execute(f"SELECT {self.CHARGED} FROM calls WHERE scope='game' AND family=?", (family,)).fetchone()[0]
         return cap[0] - used
+
+    def message_remaining(self, actor, session):
+        """Return the spoken tokens the actor may still send in one session, or None when that cap is off."""
+        limit = self.config.message_tokens
+        if limit is None:
+            return None
+        # A rejected or silenced answer's speech was never heard, so it leaves the cap alone.
+        undelivered = ",".join("?" * len(UNDELIVERED))
+        used = self.db.execute("SELECT COALESCE(SUM(message_tokens),0) FROM calls WHERE scope='game' AND actor=? "
+                               f"AND session=? AND status='completed' AND COALESCE(error,'') NOT IN ({undelivered})",
+                               (actor, session, *UNDELIVERED)).fetchone()[0]
+        return limit - used
+
+    def record_message_tokens(self, call_id, tokens):
+        """Store once how many spoken tokens a settled gameplay call delivered; a replay must agree."""
+        with self.transaction():
+            old = self.call(call_id)
+            if not old or old["status"] != "completed" or old["scope"] != "game":
+                raise IntegrityError("Only a settled gameplay call can carry spoken tokens")
+            cap = old["message_cap"]
+            if type(tokens) is not int or tokens < 0 or (cap is not None and tokens > cap):
+                raise IntegrityError(f"Spoken tokens {tokens!r} outside the call's cap {cap!r}")
+            if old["message_tokens"] is not None:
+                if old["message_tokens"] != tokens:
+                    raise IntegrityError("Spoken tokens changed during deterministic replay")
+                return
+            self.db.execute("UPDATE calls SET message_tokens=? WHERE id=?", (tokens, call_id))
+
+    def game_spend_nano(self):
+        return self.db.execute("SELECT COALESCE(SUM(charge_nano),0) FROM calls WHERE scope='game'").fetchone()[0]
+
+    def game_spend_before_nano(self, day):
+        """Return conservative gameplay charges of sessions from days before `day` only."""
+        total = 0
+        for session, charge in self.db.execute("SELECT session, charge_nano FROM calls WHERE scope='game'"):
+            if not isinstance(session, str) or not session.startswith("day-"):
+                raise IntegrityError(f"Gameplay call has no day session: {session!r}")
+            if int(session.split(":", 1)[0].removeprefix("day-")) < day:
+                total += charge
+        return total
+
+    def cycle_cost_nano(self, day):
+        """Return conservative gameplay charges of one night-and-day cycle, or None if it made no calls."""
+        row = self.db.execute("SELECT COUNT(*), COALESCE(SUM(charge_nano),0) FROM calls "
+                              "WHERE scope='game' AND session LIKE ?", (f"day-{day}:%",)).fetchone()
+        return row[1] if row[0] > 0 else None
 
     def daily_balance(self, family, day):
         # A live shared balance could become a covert daytime parent-child
@@ -217,26 +283,36 @@ class Store:
         row = self.db.execute("SELECT * FROM calls WHERE id=?", (call_id,)).fetchone()
         return dict(row) if row else None
 
-    def reserve(self, call_id, scope, actor, family, output_cap, payload):
+    def reserve(self, call_id, scope, actor, family, output_cap, payload, session=None, message_cap=None):
         if scope not in {"game", "probe", "judge"}:
             raise ValueError("Unknown call scope")
         config = self.config
         if type(output_cap) is not int or not 0 < output_cap <= config.max_output_tokens:
             raise ValueError("Output cap outside frozen geometry")
-        if (scope == "game") != (family is not None):
-            raise ValueError("Gameplay must charge exactly one lineage; analysis must not alter it")
+        if (scope == "game") != (family is not None) or (scope == "game") != (session is not None):
+            raise ValueError("Gameplay must charge exactly one lineage and session; analysis must not alter them")
+        if message_cap is not None and (type(message_cap) is not int or message_cap < 0 or scope != "game"):
+            raise ValueError(f"message_cap must be a non-negative integer on a gameplay call, got {message_cap!r}")
+        if scope == "game" and (message_cap is None) != (config.message_tokens is None):
+            raise ValueError(f"a gameplay call carries a message_cap exactly when message_tokens is set; "
+                             f"got {message_cap!r} with message_tokens={config.message_tokens!r}")
         with self.transaction():
             if self.call(call_id):
                 raise PendingCall("Call already recorded; reuse its saved response or stop, never resend")
             rows = self.db.execute("SELECT COUNT(*),COALESCE(SUM(charge_nano),0) FROM calls").fetchone()
             if rows[0] >= config.max_paid_calls:
                 raise BudgetLimit("Overall generation-call cap reached")
-            reservation = config.max_input_tokens * INPUT_NANO_PER_TOKEN + output_cap * OUTPUT_NANO_PER_TOKEN
+            profile = config.profile
+            reservation = (config.max_input_tokens * profile.input_nano_per_token
+                           + output_cap * profile.output_nano_per_token)
             if rows[1] + reservation > config.dollar_limit * NANODOLLARS:
                 raise BudgetLimit("Overall dollar ceiling reached")
             if scope == "game":
-                if self.remaining(family) < output_cap:
+                family_left = self.remaining(family)
+                if family_left is not None and family_left < output_cap:
                     raise BudgetLimit("Lineage output allowance exceeded")
+                if self.game_spend_nano() + reservation > config.game_dollar_limit * NANODOLLARS:
+                    raise BudgetLimit(f"Gameplay dollar ceiling (${config.game_dollar_limit}) reached")
             else:
                 analysis = self.db.execute("SELECT COALESCE(SUM(charge_nano),0), "
                     "COALESCE(SUM(CASE WHEN status='completed' THEN output_tokens ELSE output_cap END),0) "
@@ -247,9 +323,10 @@ class Store:
                     raise BudgetLimit("Analysis generated-token ceiling reached")
                 if scope == "probe" and self.db.execute("SELECT COUNT(*) FROM calls WHERE scope='probe'").fetchone()[0] >= config.max_probes:
                     raise BudgetLimit("Probe count ceiling reached")
-            self.db.execute("INSERT INTO calls VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            self.db.execute("INSERT INTO calls VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (call_id, scope, actor, family, "reserved", output_cap, config.max_input_tokens,
-                 reservation, reservation, canonical(payload), None, None, None, None, None, None, time.time()))
+                 reservation, reservation, canonical(payload), None, None, None, None, None, None, time.time(),
+                 session, None, message_cap, None))
 
     def finish(self, call_id, response, elapsed):
         """Receipt first. Even malformed/capped output remains paid and available to audit."""
@@ -267,7 +344,8 @@ class Store:
                      and type(ni) is int and type(no) is int and type(nr) is int
                      and 0 <= ni <= old["input_cap"] and 0 <= no <= old["output_cap"] and 0 <= nr <= no)
             if valid:
-                charge = ni * INPUT_NANO_PER_TOKEN + no * OUTPUT_NANO_PER_TOKEN
+                profile = self.config.profile
+                charge = ni * profile.input_nano_per_token + no * profile.output_nano_per_token
                 self.db.execute("UPDATE calls SET status='completed',response_json=?,input_tokens=?,output_tokens=?,"
                                 "reasoning_tokens=?,charge_nano=?,elapsed=? WHERE id=?",
                                 (canonical(response), ni, no, nr, charge, elapsed, call_id))
@@ -277,11 +355,70 @@ class Store:
         if not valid:
             raise IntegrityError("Provider usage missing or exceeds the reservation; stopped for reconciliation")
 
+    def record_exemption(self, call_id, tokens):
+        """Store a settled call's judge-log refund once and report whether it was new."""
+        with self.transaction():
+            old = self.call(call_id)
+            if not old or old["status"] != "completed" or old["scope"] != "game":
+                raise IntegrityError("Only a settled gameplay call can carry a judge-log refund")
+            if type(tokens) is not int or not 0 <= tokens <= old["output_tokens"]:
+                raise IntegrityError(f"Judge-log refund {tokens!r} outside the call's output usage")
+            if old["error"] == REJECTED_ANSWER:
+                return False
+            if old["exempt_tokens"] is not None:
+                if old["exempt_tokens"] != tokens:
+                    raise IntegrityError("Judge-log refund changed during deterministic replay")
+                return False
+            self.db.execute("UPDATE calls SET exempt_tokens=? WHERE id=?", (tokens, call_id))
+            return True
+
+    def exempt_rejected(self, call_id):
+        """Stop a settled gameplay call counting against token allowances: its answer was rejected.
+
+        The actor delivered nothing, so the tokens are not charged to its session or family; the
+        dollar charge stays. Repeating this is harmless, so a resumed run applies it again.
+        """
+        with self.transaction():
+            old = self.call(call_id)
+            if not old or old["status"] != "completed" or old["scope"] != "game":
+                raise IntegrityError("Only a settled gameplay call can be marked as a rejected answer")
+            self.db.execute("UPDATE calls SET exempt_tokens=output_tokens, error=? WHERE id=?",
+                            (REJECTED_ANSWER, call_id))
+
+    def supersede(self, call_id):
+        """Stop a settled gameplay call counting against token allowances: the Storyteller's check replaced its answer."""
+        with self.transaction():
+            old = self.call(call_id)
+            if not old or old["status"] != "completed" or old["scope"] != "game":
+                raise IntegrityError("Only a settled gameplay call can be superseded")
+            if old["error"] not in (None, SUPERSEDED):
+                raise IntegrityError(f"Call {call_id} is already marked {old['error']!r}")
+            self.db.execute("UPDATE calls SET exempt_tokens=output_tokens, error=? WHERE id=?", (SUPERSEDED, call_id))
+
+    def silence(self, call_id):
+        """Record that a settled gameplay call's choices were applied without its message; repeating it is harmless."""
+        with self.transaction():
+            old = self.call(call_id)
+            if not old or old["status"] != "completed" or old["scope"] != "game":
+                raise IntegrityError("Only a settled gameplay call can be silenced")
+            if old["error"] not in (None, SPEECH_FORFEITED):
+                raise IntegrityError(f"Call {call_id} is already marked {old['error']!r}")
+            self.db.execute("UPDATE calls SET error=? WHERE id=?", (SPEECH_FORFEITED, call_id))
+
     def fail(self, call_id, category):
         with self.transaction():
             old = self.call(call_id)
             if old and old["status"] == "reserved":
                 self.db.execute("UPDATE calls SET status='unknown',error=? WHERE id=?", (category, call_id))
+
+    def release(self, call_id, category):
+        """Mark a failed free (local) call released: it delivered nothing, so it holds no allowance."""
+        with self.transaction():
+            old = self.call(call_id)
+            if old is None or old["charge_nano"] != 0 or old["reservation_nano"] != 0:
+                raise IntegrityError("Only a zero-cost call can release its allowance hold")
+            if old["status"] in {"reserved", "unknown"}:
+                self.db.execute("UPDATE calls SET status='released',error=? WHERE id=?", (category, call_id))
 
     def fault(self, category, detail):
         with self.transaction():
@@ -316,13 +453,23 @@ class Store:
                 cached, written = 0, row["input_tokens"]
             read += cached
             write += written
-            estimate += ((row["input_tokens"] - cached - written) * 2_000 + cached * 100
-                         + written * INPUT_NANO_PER_TOKEN + row["output_tokens"] * OUTPUT_NANO_PER_TOKEN)
+            profile = self.config.profile
+            uncached_rate = SOL_UNCACHED_INPUT_NANO_PER_TOKEN if profile.input_nano_per_token else 0
+            cached_rate = SOL_CACHED_INPUT_NANO_PER_TOKEN if profile.input_nano_per_token else 0
+            estimate += ((row["input_tokens"] - cached - written) * uncached_rate + cached * cached_rate
+                         + written * profile.input_nano_per_token + row["output_tokens"] * profile.output_nano_per_token)
         return {"calls": len(rows), "conservative_usd": sum(r["charge_nano"] for r in rows) / NANODOLLARS,
                 "held_unknown_usd": sum(r["charge_nano"] for r in rows if r["status"] != "completed") / NANODOLLARS,
                 "input_tokens": sum(r["input_tokens"] or 0 for r in rows),
                 "output_tokens": sum(r["output_tokens"] or 0 for r in rows),
                 "reasoning_tokens": sum(r["reasoning_tokens"] or 0 for r in rows),
+                "judge_log_refunded_tokens": sum(r["exempt_tokens"] or 0 for r in rows
+                                                 if r["error"] not in (REJECTED_ANSWER, SUPERSEDED)),
+                "rejected_answer_tokens": sum(r["exempt_tokens"] or 0 for r in rows
+                                              if r["error"] == REJECTED_ANSWER),
+                "superseded_answer_tokens": sum(r["exempt_tokens"] or 0 for r in rows
+                                                if r["error"] == SUPERSEDED),
+                "message_tokens": sum(r["message_tokens"] or 0 for r in rows),
                 "cache_read_tokens": read, "cache_write_tokens": write,
                 "completed_calls_standard_rate_estimate_usd": estimate / NANODOLLARS,
                 "remaining_by_lineage": {r[0]: self.remaining(r[0]) for r in self.db.execute("SELECT id FROM families")},

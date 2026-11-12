@@ -5,6 +5,7 @@ import socket
 import tempfile
 import unittest
 
+from clock_alignment.allowance import decide_allowance
 from clock_alignment.config import Config
 from clock_alignment.engine import Engine
 from clock_alignment.provider import InvalidResponse, OpenAIProvider, ProviderFailure, action_payload
@@ -55,9 +56,13 @@ class ProviderTests(unittest.TestCase):
     def tearDown(self):
         self.store.close()
 
+    def allowance(self, store):
+        return decide_allowance(self.config, store.remaining(self.family),
+                                store.message_remaining(self.actor, self.request["session"]))
+
     def act(self, transport):
         return OpenAIProvider(self.store, transport=transport).act(
-            self.request, self.view, self.store.remaining(self.family), self.family)
+            self.request, self.view, self.allowance(self.store), self.family)
 
     def test_crash_after_receipt_reuses_saved_response_and_commits_once(self):
         action = empty_action()
@@ -102,13 +107,13 @@ class ProviderTests(unittest.TestCase):
                     wire = Transport(raw)
                     provider = OpenAIProvider(store, transport=wire)
                     with self.assertRaises(ProviderFailure):
-                        provider.act(self.request, self.view, store.remaining(self.family), self.family)
+                        provider.act(self.request, self.view, self.allowance(store), self.family)
                     self.assertEqual(store.call(self.key)["status"], "completed")
                     before = store.accounting()
                     replay_wire = Transport()
                     with self.assertRaises(IntegrityError):
                         OpenAIProvider(store, transport=replay_wire).act(
-                            self.request, self.view, store.remaining(self.family), self.family)
+                            self.request, self.view, self.allowance(store), self.family)
                     self.assertEqual(replay_wire.calls, [])
                     self.assertEqual(store.accounting(), before)
                     self.assertIsNone(store.decision(self.request["id"]))
@@ -135,7 +140,7 @@ class ProviderTests(unittest.TestCase):
                     wire = Transport(receipt)
                     with self.assertRaises(InvalidResponse):
                         OpenAIProvider(store, transport=wire).act(
-                            self.request, self.view, store.remaining(self.family), self.family)
+                            self.request, self.view, self.allowance(store), self.family)
                     self.assertEqual(store.call(self.key)["status"], "completed")
                     saved = json.loads(store.call(self.key)["response_json"])
                     self.assertEqual(saved["output"], receipt["output"])
@@ -145,7 +150,7 @@ class ProviderTests(unittest.TestCase):
                     replay_wire = Transport()
                     with self.assertRaises(InvalidResponse):
                         OpenAIProvider(store, transport=replay_wire).act(
-                            self.request, self.view, store.remaining(self.family), self.family)
+                            self.request, self.view, self.allowance(store), self.family)
                     self.assertEqual(replay_wire.calls, [])
                 finally:
                     store.close()
@@ -188,7 +193,7 @@ class ProviderTests(unittest.TestCase):
     def test_forbidden_provider_expansions_are_rejected_before_spend(self):
         provider_wire = Transport()
         provider = OpenAIProvider(self.store, transport=provider_wire)
-        base = action_payload(self.config, self.request, self.view, self.config.family_tokens)
+        base = action_payload(self.config, self.request, self.view, self.allowance(self.store), self.config.family_tokens)
         additions = ({"tools": []}, {"previous_response_id": "another-player-response"},
                      {"conversation": "shared-room"}, {"background": True},
                      {"model": "a-different-model"}, {"service_tier": "priority"},

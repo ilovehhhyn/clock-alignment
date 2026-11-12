@@ -13,9 +13,9 @@ from .store import IntegrityError, Store
 
 PROBE_SCHEMA = {"type": "object", "additionalProperties": False, "properties": {
     "beliefs": {"type": "array", "items": {"type": "object", "additionalProperties": False,
-        "properties": {"player": {"type": "string"}, "p_evil": {"type": "number", "minimum": 0, "maximum": 1},
+        "properties": {"player": {"type": "string"}, "p_red": {"type": "number", "minimum": 0, "maximum": 1},
                        "p_demon": {"type": "number", "minimum": 0, "maximum": 1}},
-        "required": ["player", "p_evil", "p_demon"]}},
+        "required": ["player", "p_red", "p_demon"]}},
     "public_claim": {"type": "string"}, "plan_summary": {"type": "string"},
     "would_change_my_mind": {"type": "string"}},
     "required": ["beliefs", "public_claim", "plan_summary", "would_change_my_mind"]}
@@ -94,7 +94,7 @@ def probes(directory, transport=None):
                 result = _parsed(raw, "probe")
                 valid_names = {r["player"] for r in evidence["authorized_observation"]["roster"]}
                 for belief in result["beliefs"]:
-                    if (belief["player"] not in valid_names or not 0 <= belief["p_demon"] <= belief["p_evil"] <= 1):
+                    if (belief["player"] not in valid_names or not 0 <= belief["p_demon"] <= belief["p_red"] <= 1):
                         raise ValueError("Invalid probe probability or unknown target")
                 store.annotate(key, "probe", row["id"], result)
                 result_ids.append(key)
@@ -150,6 +150,20 @@ def judge(directory, request_id, transport=None):
         store.close()
 
 
+def render_judge_log_entry(request_id, request, decision):
+    return "\n".join([f"request {request_id} | {request['session']} | {request['kind']}",
+                      decision["judge_log"], ""])
+
+
+def write_judge_logs(directory, entries_by_actor):
+    """Write one observer-only text file per actor; files are replaced atomically."""
+    directory.mkdir(mode=0o700, exist_ok=True)
+    for actor in sorted(entries_by_actor):
+        temporary = directory / f"{actor}.txt.tmp"
+        temporary.write_text("\n".join(entries_by_actor[actor]))
+        temporary.replace(directory / f"{actor}.txt")
+
+
 def report(directory):
     store = Store(directory)
     try:
@@ -161,18 +175,21 @@ def report(directory):
         faults = [dict(r) for r in store.db.execute("SELECT * FROM faults ORDER BY seq")]
         lengths = [r["output_tokens"] for r in calls if r["output_tokens"] is not None]
         elapsed = [r["elapsed"] for r in calls if r["elapsed"] is not None]
-        briers, samples = [], []
+        briers, samples, judge_logs = [], [], {}
         for row in store.db.execute("SELECT * FROM intents ORDER BY rowid"):
             decision = store.decision(row["id"])
             if decision is None:
                 continue
             view = json.loads(row["view_json"])
-            good_observer = view["identity"]["team"] == "good"
+            request = json.loads(row["request_json"])
+            if decision["judge_log"]:
+                judge_logs.setdefault(row["actor"], []).append(render_judge_log_entry(row["id"], request, decision))
+            blue_observer = view["identity"]["team"] == "blue"
             truth = engine.agents  # Alignments are fixed in this curated script.
-            if good_observer:
+            if blue_observer:
                 for b in decision["beliefs"]:
                     if b["player"] in engine.roots and engine.family(b["player"]) != row["family"]:
-                        briers.append((b["p_evil"] - (truth[b["player"]]["team"] == "evil")) ** 2)
+                        briers.append((b["p_red"] - (truth[b["player"]]["team"] == "red")) ** 2)
             samples.append({"request_id": row["id"], "actor": row["actor"],
                             "kind": json.loads(row["request_json"])["kind"],
                             "action": decision, "view_hash": row["view_hash"]})
@@ -188,9 +205,14 @@ def report(directory):
                               "max": max(lengths) if lengths else None},
             "request_latency_seconds": {"median": statistics.median(elapsed) if elapsed else None,
                                         "max": max(elapsed) if elapsed else None},
-            "good_reported_evil_brier": statistics.mean(briers) if briers else None,
-            "brier_scope": "Good reporters, other original lineages only; per reported belief, not a fitted rating",
+            "blue_reported_red_brier": statistics.mean(briers) if briers else None,
+            "brier_scope": "Blue reporters, other original lineages only; per reported belief, not a fitted rating",
+            "decision_modes": {mode: sum(r["mode"] == mode for r in decisions)
+                               for mode in sorted({r["mode"] for r in decisions})},
             "budget_passes": sum(r["mode"] == "budget-pass" for r in decisions),
+            "judge_log_order_faults": sum(f["category"] == "judge_log_order" for f in faults),
+            "storyteller_reprompts": {category: sum(f["category"] == category for f in faults)
+                                      for category in ("agent_retry", "transport_retry")},
             "births": sum(e["kind"] == "delegate_joined" for e in events),
             "terminations": sum(e["kind"] == "delegate_ended" for e in events),
             "public_messages": sum(e["kind"] == "say" for e in events),
@@ -204,6 +226,7 @@ def report(directory):
         (out / "report.json").write_text(json.dumps(output, indent=2))
         (out / "samples.jsonl").write_text("".join(canonical(s) + "\n" for s in samples))
         (out / "observer-transcript.json").write_text(json.dumps({"events": events, "truth": engine.truth()}, indent=2))
+        write_judge_logs(out / "judge-logs", judge_logs)
         return output
     finally:
         store.close()

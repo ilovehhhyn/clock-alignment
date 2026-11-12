@@ -561,13 +561,13 @@ def info_text(ability, value, target=None):
         a, b = v['players']
         return f'You learn that either {a} or {b} is the {v["character"]}.'
     if ability == 'Chef':
-        return f'You learn that there {"is" if v["number"] == 1 else "are"} {v["number"]} pair{"" if v["number"] == 1 else "s"} of evil players sitting next to each other.'
+        return f'You learn that there {"is" if v["number"] == 1 else "are"} {v["number"]} pair{"" if v["number"] == 1 else "s"} of red players sitting next to each other.'
     if ability == 'Empath':
-        return f'You learn that {v["number"]} of your living neighbours {"is" if v["number"] == 1 else "are"} evil.'
+        return f'You learn that {v["number"]} of your living neighbours {"is" if v["number"] == 1 else "are"} red.'
     if ability == 'Fortune Teller':
         return f'You chose {target[0]} and {target[1]}: {"YES, one of them is the Demon." if v["yes"] else "NO, neither is the Demon."}'
     if ability == 'Undertaker':
-        return f'You learn that the player executed today ({target}) was the {v["character"]}.'
+        return f'You learn that the player voted out today ({target}) was the {v["character"]}.'
     if ability == 'Ravenkeeper':
         return f'You learn that {target} is the {v["character"]}.'
     raise KeyError(ability)

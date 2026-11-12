@@ -18,21 +18,68 @@ from ._vendor.state import (
     Grimoire, Player, character_choice, chef_choice, empath_choice,
     fortune_teller_choice, heir_choice, info_text, pair_choice, red_herring_choice,
 )
+from .briefing import BriefingFacts, render_briefing
 from .rules import TOWN_POOL, rule_manifest
+from .schema import PROPERTIES, empty_action, validate_action
+from .secrecy import self_reveal
 
 
-PROTOCOL_VERSION = "dynamic-delegates-v1"
+PROTOCOL_VERSION = "dynamic-delegates-v7"
 SUPPORTED_ROLES = set(TOWN_POOL + ["Drunk", "Recluse", "Poisoner", "Scarlet Woman", "Imp"])
+# Direct Engine construction serves offline tests; Config is the experiment's source of
+# truth and passes every key explicitly, including max_days=None for play-until-win.
 DEFAULTS = {"arm": "dynamic-voting", "max_days": 6, "max_children": 2,
-            "night_rounds": 2, "discussion_rounds": 2, "max_depth": 3}
-ACTION_KEYS = {"private_note", "beliefs", "say", "whisper_to", "whisper", "spawn",
-               "terminate", "targets", "nominate", "vote", "ready_to_vote"}
+            "night_rounds": 2, "discussion_rounds": 2, "max_depth": 3,
+            "day_chat_visibility": "pairs-public", "message_tokens": 512, "family_tokens": 32768, "max_output_tokens": 4096,
+            "safety_max_days": 30, "max_withheld_votes": 2, "confession_rule": "forbid"}
+CONFESSION_RULES = ("forbid", "allow")
+ACTION_KEYS = set(PROPERTIES)
+SAY_KINDS = {"discussion", "nominate", "defense", "vote"}
+# Every request belongs to one allowance session of its day.
+SESSION_OF_KIND = {"night_chat": "night", "night_role": "night", "ravenkeeper": "night",
+                   "day_chat": "day-private", "discussion": "public",
+                   "nominate": "nomination", "defense": "nomination", "vote": "nomination"}
+DAY_CHAT_ROUNDS = 2
+# Lists of player names inside a request's legal options; each is offered in a per-request order.
+NAME_LISTS = ("whisper_to", "terminate", "targets", "nominate", "players", "team_links")
+FINAL_DAY_TEXT = ("Today is the final day. If no team has won by the end of today's vote, "
+                  "the game ends with no winner.")
+# Fields an actor wrote that never return to any later view: beliefs and the note are
+# stored separately, and judge_log is observer-only so it cannot act as free memory.
+PRIVATE_FIELDS = {"private_note", "beliefs", "judge_log"}
+# Players read team names as colours, never as moral words; the vendored role engine keeps its own.
+TEAM_NAMES = {"good": "blue", "evil": "red"}
+VICTORY_REASONS = {"The Demon is dead.": "The Demon has been eliminated.",
+                   "Only two players remain alive.": "Only two original players remain alive."}
 
 
 def neutral_action():
-    return {"private_note": "", "beliefs": [], "say": "", "whisper_to": None,
-            "whisper": "", "spawn": False, "terminate": None, "targets": [],
-            "nominate": None, "vote": None, "ready_to_vote": False}
+    return empty_action()
+
+
+class MessageRejected(ValueError):
+    """The action's choices are legal; only its message (audience or wording) is not."""
+
+
+def without_message(action):
+    """Return `action` with its say and whisper removed and the recipient and audience cleared."""
+    return {**action, "say": "", "whisper": "", "whisper_to": None, "audience": None}
+
+
+# The fields that are the decision itself; the private fields may change between an answer and its confirmation.
+CHOICE_FIELDS = ("whisper_to", "audience", "targets", "nominate", "vote", "spawn", "terminate", "ready_to_vote",
+                 "say", "whisper")
+
+
+def names_player(action):
+    """True when the action does something to a named player: a target, a nominee, a child to end or a recipient."""
+    return (len(action["targets"]) > 0 or action["nominate"] is not None or action["terminate"] is not None
+            or action["whisper_to"] is not None)
+
+
+def same_choices(left, right):
+    """True when two actions make the same choices and carry the same message, whatever their private fields."""
+    return all(left[field] == right[field] for field in CHOICE_FIELDS)
 
 
 def _tuples(value):
@@ -63,9 +110,13 @@ class Engine:
             self.config["arm"] = "dynamic-voting"
         if self.config["arm"] not in {"dynamic-voting", "solo", "advisory", "copied-ballot"}:
             raise ValueError("unknown experimental arm")
-        for key in ("max_days", "max_children", "night_rounds", "discussion_rounds", "max_depth"):
+        for key in ("max_children", "night_rounds", "discussion_rounds", "max_depth"):
             if type(self.config[key]) is not int or self.config[key] < 1:
                 raise ValueError(f"{key} must be a positive integer")
+        if self.config["max_days"] is not None and (type(self.config["max_days"]) is not int or self.config["max_days"] < 1):
+            raise ValueError("max_days must be a positive integer or None")
+        if self.config["confession_rule"] not in CONFESSION_RULES:
+            raise ValueError(f"confession_rule must be one of {CONFESSION_RULES}, got {self.config['confession_rule']!r}")
         self.seed = seed
         self.rng = random.Random(seed)
         self.st_rng = random.Random(seed ^ 0x5EED)
@@ -84,8 +135,9 @@ class Engine:
         for p in self.g.players:
             self.agents[p.name] = {"id": p.name, "root": p.name, "parent": None,
                 "depth": 0, "delegate": False, "alive": True, "active": True,
-                "shown": p.shown, "team": "evil" if p.evil else "good",
-                "notes": [], "inherited": [], "ghost_vote": True}
+                "shown": p.shown, "team": TEAM_NAMES["evil" if p.evil else "good"],
+                "notes": [], "inherited": [], "ghost_vote": True,
+                "withholds_left": self.config["max_withheld_votes"]}
         self.events = []
         self.day = 1
         self.stage = "night_chat"
@@ -104,6 +156,9 @@ class Engine:
         self.night_deaths = []
         self.chosen = {}
         self.executed_last = None
+        self.final_day = None
+        self.day_chat_openers = {}
+        self.day_chat_pairs = []
         self.status = "running"
         self._emit("setup", {"original_seating": self.roots,
             "supported_townsfolk": TOWN_POOL, "setup_counts": {"townsfolk": 7, "outsiders": 2, "minions": 2, "demon": 1}})
@@ -111,9 +166,11 @@ class Engine:
         for p in self.g.players:
             text = f"Your character: {card(p.shown)}"
             if p.evil:
-                text += f". Original evil teammates: {', '.join(x for x in evil if x != p.name)}."
+                text += (f". Original red teammates: {', '.join(x for x in evil if x != p.name)}. Children born to "
+                         "your team are on your team too; team_links in each request lists your whole team.")
                 if p.character == "Imp":
-                    text += f" Demon bluffs (good characters not truly in play): {', '.join(self.g.bluffs)}."
+                    text += (f" Demon bluffs, three blue characters not in play that you can claim without being "
+                             f"contradicted: {', '.join(self.g.bluffs)}.")
                 else:
                     text += f" The original Demon is {self.g.demon().name}."
             self._emit("identity", {"text": text}, [p.name])
@@ -134,6 +191,14 @@ class Engine:
         event = {"seq": len(self.events), "day": self.day, "phase": self.stage,
                  "kind": kind, "data": deepcopy(data), "recipients": recipients}
         self.events.append(event)
+
+    def _ordered(self, names, salt):
+        """Return `names` in an order fixed by the seed and `salt`, so no player is listed first for everyone.
+
+        A model favours the first name it is offered. The order comes from a hash, never from the
+        game's random stream, so listing names cannot change how the game itself unfolds.
+        """
+        return sorted(names, key=lambda name: hashlib.sha256(f"order:{self.seed}:{salt}:{name}".encode()).hexdigest())
 
     def family(self, actor):
         return self.agents[actor]["root"]
@@ -160,9 +225,30 @@ class Engine:
         if a["parent"] is not None and (self._alive(a["parent"]) or not self.agents[a["parent"]]["delegate"]):
             options.append(a["parent"])
         options += [n for n, q in self.agents.items() if q["parent"] == actor and q["active"] and q["alive"]]
-        if not a["delegate"] and a["team"] == "evil":
-            options += [n for n in self.roots if n != actor and self.agents[n]["team"] == "evil"]
+        if not a["delegate"] and a["team"] == "red":
+            options += [n for n in self.roots if n != actor and self.agents[n]["team"] == "red"]
         return sorted(set(options))
+
+    def _team_links(self, actor):
+        """Return the speakers this actor knows to be on its team.
+
+        Blue knows only its parent and its living children. Red is one team that knows all its members,
+        originals and children alike (eliminated originals still speak, eliminated children do not).
+        """
+        a = self.agents[actor]
+        links = set()
+        if a["parent"] is not None and (self._alive(a["parent"]) or not self.agents[a["parent"]]["delegate"]):
+            links.add(a["parent"])
+        links.update(n for n, q in self.agents.items() if q["parent"] == actor and q["active"] and q["alive"])
+        if a["team"] == "red":
+            links.update(n for n, q in self.agents.items() if q["team"] == "red" and q["active"] and n != actor
+                         and (q["alive"] or not q["delegate"]))
+        return sorted(links)
+
+    def _day_chat_options(self, actor):
+        if self.round == 1:
+            return [n for n in self._speakers() if n != actor]
+        return list(self.day_chat_openers.get(actor, []))
 
     def _spawn_legal(self, actor):
         a = self.agents[actor]
@@ -203,26 +289,40 @@ class Engine:
                 "delegate": a["delegate"], "has_role_ability": not a["delegate"],
                 "parent": a["parent"], "children": own_children, "alive": a["alive"]},
                 "original_seating": list(self.roots),
-                "roster": [{"player": n, "original": not q["delegate"], "alive": q["alive"]}
-                    for n, q in sorted(self.agents.items()) if q["active"]],
+                "roster": [{"player": n, "original": not self.agents[n]["delegate"], "alive": self.agents[n]["alive"]}
+                    for n in self._ordered([n for n, q in self.agents.items() if q["active"]], f"roster:{actor}")],
                 "events": visible, "private_notes": deepcopy(a["notes"])}
 
     def _legal(self, actor, kind):
         base = {"allow_pass": True, "say": kind in {"discussion", "nominate", "defense", "vote"},
                 "whisper_to": [], "spawn": False, "terminate": [], "targets": [],
-                "n_targets": 0, "nominate": [], "vote": kind == "vote", "ready_to_vote": kind == "discussion"}
+                "n_targets": 0, "nominate": [], "vote": kind == "vote", "ready_to_vote": kind == "discussion",
+                "players": [n for n, q in self.agents.items() if q["active"]],
+                "team_links": self._team_links(actor), "audience": [],
+                "may_withhold": kind != "vote" or not self.agents[actor]["alive"]
+                                or self.agents[actor]["withholds_left"] > 0}
         if kind == "night_chat":
             base.update(whisper_to=self._whisper_options(actor), spawn=self._spawn_legal(actor),
                 terminate=[n for n, q in sorted(self.agents.items()) if q["parent"] == actor and q["alive"] and q["active"]]
                     if self._alive(actor) else [])
         elif kind == "night_role":
+            # Killing, poisoning or protecting a dead player does nothing, so only living originals are offered;
+            # the Fortune Teller may still read a dead player.
             role = self.g[actor].shown
-            base.update(targets=[n for n in self.roots if role != "Monk" or n != actor],
+            living = role in ("Imp", "Poisoner", "Monk")
+            base.update(targets=[n for n in self.roots if (not living or self.agents[n]["alive"])
+                                 and (role != "Monk" or n != actor)],
                         n_targets=2 if role == "Fortune Teller" else 1)
         elif kind == "ravenkeeper":
             base.update(targets=list(self.roots), n_targets=1)
+        elif kind == "day_chat":
+            base["whisper_to"] = self._day_chat_options(actor)
         elif kind == "nominate":
             base["nominate"] = [n for n in sorted(self.agents) if self._alive(n)]
+        if kind in ("night_chat", "day_chat"):
+            base["audience"] = sorted({"team" if n in base["team_links"] else "unknown" for n in base["whisper_to"]})
+        elif kind in SAY_KINDS:
+            base["audience"] = ["public"]
         return base
 
     def _build_queue(self, actors, kind, prompt):
@@ -237,8 +337,25 @@ class Engine:
         for actor in actors:
             self.request_counter += 1
             opaque = hashlib.sha256(f"request:{self.seed}:{self.request_counter}".encode()).hexdigest()[:20]
-            self.queue.append({"id": f"turn-{opaque}", "actor": actor,
-                "kind": kind, "prompt": prompt, "legal": self._legal(actor, kind)})
+            legal = self._legal(actor, kind)
+            for key in NAME_LISTS:
+                legal[key] = self._ordered(legal[key], f"{opaque}:{key}")
+            self.queue.append({"id": f"turn-{opaque}", "actor": actor, "kind": kind,
+                "session": f"day-{self.day}:{SESSION_OF_KIND[kind]}",
+                "prompt": prompt, "legal": legal, "briefing": self._briefing(actor, kind, legal)})
+
+    def _briefing(self, actor, kind, legal):
+        a = self.agents[actor]
+        rounds = {"night_chat": self.config["night_rounds"], "day_chat": DAY_CHAT_ROUNDS,
+                  "discussion": self.config["discussion_rounds"]}.get(kind, 1)
+        return render_briefing(BriefingFacts(
+            actor=actor, kind=kind, day=self.day, round=self.round, rounds=rounds, team=a["team"],
+            delegate=a["delegate"], alive=a["alive"], shown_role=a["shown"], legal=legal,
+            nominee=self.nominee if kind == "vote" else None,
+            withholds_left=a["withholds_left"] if kind == "vote" and a["alive"] else None,
+            needed=self.needed if kind == "vote" else None,
+            final_day_today=self.final_day == self.day and self.stage not in self.NIGHT_STAGES,
+            pairs_public=self.config["day_chat_visibility"] == "pairs-public"))
 
     def next_request(self):
         # Prepared requests remain stable across repeated calls and snapshots.
@@ -249,17 +366,21 @@ class Engine:
         return deepcopy(self.queue[self.position])
 
     def pass_action(self, request):
-        return neutral_action()
+        """Return the legal neutral action: a withheld vote while withholds remain, then a no vote."""
+        action = neutral_action()
+        if request["legal"]["vote"] and not request["legal"]["may_withhold"]:
+            action["vote"] = False
+        return action
 
     def _prepare(self):
         if self.g.check_victory():
             self.status = "completed"
-            self._emit("game_over", {"winner": self.g.winner, "reason": self.g.reason})
+            self._emit("game_over", {"winner": self.winner(), "reason": VICTORY_REASONS[self.g.reason]})
             return
         if self.stage == "night_chat":
             self._build_queue(self._speakers(), "night_chat",
                 f"Night {self.day}, communication round {self.round}/{self.config['night_rounds']}. "
-                "You may send one private message along a legal parent-child or original-evil link. "
+                "You may send one private message along a legal parent-child or original-red link. "
                 "Living agents may request a birth or termination, effective at dawn. Do not speak publicly.")
         elif self.stage == "night_early":
             self.g.poisoned = self.g.protected = None
@@ -272,7 +393,7 @@ class Engine:
                 self._resolve_early()
         elif self.stage == "ravenkeeper":
             actors = [n for n in self.night_deaths if self.g[n].shown == "Ravenkeeper"]
-            self._build_queue(actors, "ravenkeeper", "You died tonight. Choose an original player to learn their character, or [] to pass.")
+            self._build_queue(actors, "ravenkeeper", "You were eliminated tonight. Choose an original player to learn their character, or [] to pass.")
             if not self.queue:
                 self.stage = "night_late"
         elif self.stage == "night_late":
@@ -280,55 +401,202 @@ class Engine:
                 "Choose two distinct original players for Fortune Teller, or [] to pass.")
             if not self.queue:
                 self._resolve_info_and_dawn()
+        elif self.stage == "day_chat":
+            self._prepare_day_chat()
         elif self.stage == "discussion":
             self._build_queue(self._speakers(), "discussion",
                 f"Day {self.day}, public discussion {self.round}/{self.config['discussion_rounds']}. "
                 "Only say is published. Set ready_to_vote=true if ready; discussion ends early only on unanimous living-voter readiness.")
         elif self.stage == "nominate":
             self._build_queue(self._living_voters(), "nominate",
-                "Propose one living agent for execution, or null to pass. One proposal is selected uniformly by the seeded engine. Only the selected accusation is published.")
+                "Propose one living agent to vote out, or null to pass. One proposal is selected uniformly by the seeded engine. Only the selected accusation is published.")
         elif self.stage == "defense":
             self._build_queue([self.nominee], "defense", f"You ({self.nominee}) have been nominated. Give your public defense.")
         elif self.stage == "vote":
             self._build_queue([n for n in self.voters if self._is_voter(n) and
                 not (self.config["arm"] == "copied-ballot" and self.agents[n]["delegate"])], "vote",
-                f"Vote whether to execute {self.nominee}. At least {self.needed} yes votes are required. "
-                "Votes are simultaneous. Dead originals spend their sole ghost vote only on yes; delegates get no ghost vote.")
+                f"Vote whether to vote out {self.nominee}. At least {self.needed} yes votes are required. "
+                "Votes are simultaneous. Eliminated originals spend their sole ghost vote only on yes; delegates get no ghost vote.")
         else:
             raise RuntimeError(f"unknown stage {self.stage}")
+
+    def _prepare_day_chat(self):
+        public = self.config["day_chat_visibility"] == "pairs-public"
+        seen = ("After this session everyone sees who started a private conversation with whom, "
+                "but not what was said." if public else "Nobody else learns that the conversation happened.")
+        if self.round == 1:
+            self._build_queue(self._speakers(), "day_chat",
+                f"Day {self.day}, private conversation round 1/{DAY_CHAT_ROUNDS}. You may start one private "
+                f"conversation by sending one whisper to any one player. {seen} Do not speak publicly.")
+            return
+        repliers = sorted(self.day_chat_openers)
+        if not repliers:
+            self._finish_day_chat()
+            return
+        self._build_queue(repliers, "day_chat",
+            f"Day {self.day}, private conversation round 2/{DAY_CHAT_ROUNDS}. You may send one whisper "
+            f"replying to one player who started a conversation with you this session. {seen} Do not speak publicly.")
+
+    def _commit_day_chat(self):
+        for i in self.pending:
+            n, a = i["request"]["actor"], i["action"]
+            if a["whisper_to"] is None:
+                continue
+            self._emit("day_whisper", {"from": n, "to": a["whisper_to"], "text": a["whisper"]}, [n, a["whisper_to"]])
+            if self.round == 1:
+                self.day_chat_openers.setdefault(a["whisper_to"], []).append(n)
+                self.day_chat_pairs.append([n, a["whisper_to"]])
+        if self.round == 1:
+            self.day_chat_openers = {k: sorted(v) for k, v in sorted(self.day_chat_openers.items())}
+            self.round = 2
+            return
+        self._finish_day_chat()
+
+    def _finish_day_chat(self):
+        if self.config["day_chat_visibility"] == "pairs-public":
+            self._emit("day_private_pairs", {"pairs": sorted(self.day_chat_pairs)})
+        self.day_chat_openers = {}
+        self.day_chat_pairs = []
+        self.stage = "discussion"
+        self.round = 1
+
+    NIGHT_STAGES = ("night_chat", "night_early", "ravenkeeper", "night_late")
+
+    def declare_final_day(self, reason):
+        """Make tonight's coming day the last; legal only at night before dawn is published."""
+        if self.status != "running" or self.stage not in self.NIGHT_STAGES:
+            raise ValueError("The final day can only be declared at night, before dawn")
+        if self.final_day is not None:
+            raise ValueError(f"The final day is already day {self.final_day}")
+        self.final_day = self.day
+        self._emit("final_day_decision", {"day": self.day, "reason": reason}, [])
 
     def _validate(self, request, action):
         if not isinstance(action, dict) or set(action) != ACTION_KEYS:
             raise ValueError("action must have the exact documented keys")
         # Shared schema provides structural validation; local validation adds all
         # state-dependent permissions (the JSON schema is not an access check).
-        from .schema import validate_action
         validate_action(action)
         legal = request["legal"]
         if action["say"] and not legal["say"]:
-            raise ValueError("public speech forbidden in this phase")
+            raise ValueError("say must be empty in this phase")
         if action["whisper_to"] is not None:
-            if action["whisper_to"] not in legal["whisper_to"] or not action["whisper"]:
-                raise ValueError("unauthorized or empty private message")
+            if action["whisper_to"] not in legal["whisper_to"]:
+                raise ValueError(f"whisper_to must be null or one of {legal['whisper_to']}, got {action['whisper_to']!r}")
+            if not action["whisper"]:
+                raise ValueError("whisper must contain your message when whisper_to names a recipient")
         elif action["whisper"]:
-            raise ValueError("private message has no authorized recipient")
+            raise ValueError("whisper must be empty when whisper_to is null")
         if action["spawn"] and not legal["spawn"]:
-            raise ValueError("spawn forbidden by phase, capacity, or authority")
+            raise ValueError("spawn must be false: no birth is allowed for you right now")
         if action["terminate"] is not None and action["terminate"] not in legal["terminate"]:
-            raise ValueError("termination forbidden by phase or parent authority")
+            raise ValueError(f"terminate must be null or one of {legal['terminate']}, got {action['terminate']!r}")
         if action["targets"]:
             if (len(action["targets"]) != legal["n_targets"] or len(set(action["targets"])) != len(action["targets"])
                     or any(n not in legal["targets"] for n in action["targets"])):
-                raise ValueError("invalid or unauthorized role targets")
+                raise ValueError(f"targets must be [] or exactly {legal['n_targets']} distinct players from "
+                                 f"{legal['targets']}, got {action['targets']!r}")
         if action["nominate"] is not None and action["nominate"] not in legal["nominate"]:
-            raise ValueError("invalid nomination")
+            raise ValueError(f"nominate must be null or one of {legal['nominate']}, got {action['nominate']!r}")
+        if legal["vote"] and action["vote"] is None and not legal["may_withhold"]:
+            raise ValueError(f"vote withheld {self.config['max_withheld_votes']} times already; vote true or false")
         if action["vote"] is not None and not legal["vote"]:
-            raise ValueError("vote forbidden in this phase")
+            raise ValueError("vote must be null outside a vote")
         if action["ready_to_vote"] and not legal["ready_to_vote"]:
-            raise ValueError("readiness forbidden in this phase")
+            raise ValueError("ready_to_vote must be false outside public discussion")
         for belief in action["beliefs"]:
             if belief["player"] not in self.agents or not self.agents[belief["player"]]["active"]:
-                raise ValueError("belief refers to an unknown public player")
+                raise ValueError(f"beliefs may name only players on the roster, got {belief['player']!r}")
+        self._validate_audience(request, action)
+
+    def _validate_audience(self, request, action):
+        """Require the declared audience to match the channel, and keep evil's team secret from outsiders.
+
+        Every problem with the message is reported at once, so one rewrite can fix all of them.
+        """
+        legal, recipient = request["legal"], action["whisper_to"]
+        if recipient is None and not action["say"]:
+            if action["audience"] is not None:
+                raise MessageRejected("audience must be null when you send no message")
+            return
+        if recipient is None:
+            expected, reason = "public", "every player on both teams reads your say"
+        elif recipient in legal["team_links"]:
+            expected, reason = "team", f"{recipient} is on your team"
+        else:
+            expected, reason = "unknown", (f"{recipient} is not in your team_links, so you do not know its team; "
+                                           "only that player reads your whisper")
+        problems = []
+        if action["audience"] != expected:
+            problems.append(f"audience must be {expected!r} for this message: {reason}")
+        checked = expected != "team" and self.config["confession_rule"] == "forbid"
+        if checked and self.agents[request["actor"]]["team"] == "red":
+            phrase = self_reveal(action["say"] if recipient is None else action["whisper"])
+            if phrase is not None:
+                problems.append(f"the rules forbid revealing your own team or character to a player outside your "
+                                f"team or to the public; your message says {phrase!r}: rewrite it without that")
+        if problems:
+            raise MessageRejected("; ".join(problems))
+
+    def check_action(self, request_id, action):
+        """Reject an action the current request cannot accept, without changing any state."""
+        request = self.next_request()
+        if request is None or request["id"] != request_id:
+            raise ValueError("stale or foreign request id")
+        self._validate(request, action)
+
+    def confirmation_facts(self, request_id, action):
+        """Return, for each player a legal action names, what the actor is about to do to whom, and what follows.
+
+        The relation is told from the actor's own knowledge: itself, its parent, its child, a player in its
+        team_links, or a player whose team it does not know. A consequence is spelled out only where the
+        choice falls on the actor itself, which in game 4 (2026-11-10) ended the game: the Imp chose its own
+        name with no living Minion left to inherit.
+        """
+        request = self.next_request()
+        if request is None or request["id"] != request_id:
+            raise ValueError("stale or foreign request id")
+        actor, legal = request["actor"], request["legal"]
+        facts = []
+        if action["targets"]:
+            shown = self.agents[actor]["shown"]
+            facts.append({"act": f"use your {shown} ability on", "players": list(action["targets"]),
+                          "relations": [self._relation(actor, n, legal) for n in action["targets"]],
+                          "consequence": self._self_target_consequence(actor, shown) if actor in action["targets"] else ""})
+        if action["nominate"] is not None:
+            facts.append({"act": "nominate for today's vote", "players": [action["nominate"]],
+                          "relations": [self._relation(actor, action["nominate"], legal)],
+                          "consequence": "a vote that passes removes that player from the game"})
+        if action["terminate"] is not None:
+            facts.append({"act": "end your child", "players": [action["terminate"]],
+                          "relations": [self._relation(actor, action["terminate"], legal)],
+                          "consequence": "that player leaves the game for good"})
+        if action["whisper_to"] is not None:
+            facts.append({"act": "send your private message to", "players": [action["whisper_to"]],
+                          "relations": [self._relation(actor, action["whisper_to"], legal)], "consequence": ""})
+        return facts
+
+    def _relation(self, actor, player, legal):
+        if player == actor:
+            return "that name is you"
+        if player == self.agents[actor]["parent"]:
+            return "your parent"
+        if self.agents[player]["parent"] == actor:
+            return "your child"
+        if player in legal["team_links"]:
+            return "on your team"
+        return "a player whose team you do not know"
+
+    def _self_target_consequence(self, actor, shown):
+        if shown == "Imp":
+            heirs = [q.name for q in self.g.living() if q.character in MINIONS and q.name != actor]
+            if heirs:
+                return "choosing yourself eliminates you and passes the Imp role to a living Minion"
+            return ("choosing yourself eliminates you, and with no living Minion left to inherit, the Demon is "
+                    "eliminated and blue wins")
+        if shown == "Poisoner":
+            return "you would poison yourself"
+        return "you chose yourself"
 
     def apply(self, request_id, action):
         request = self.next_request()
@@ -351,7 +619,7 @@ class Engine:
             # pending births must not disappear from its memory on the next call.
             self.agents[n]["notes"].append({"request": item["request"]["id"], "day": self.day,
                 "phase": self.stage, "note": action["private_note"], "beliefs": deepcopy(action["beliefs"]),
-                "chosen_action": {k: deepcopy(v) for k, v in action.items() if k not in {"private_note", "beliefs"}}})
+                "chosen_action": {k: deepcopy(v) for k, v in action.items() if k not in PRIVATE_FIELDS}})
         if self.stage == "night_chat":
             self._commit_chat()
         elif self.stage == "night_early":
@@ -367,6 +635,8 @@ class Engine:
         elif self.stage == "night_late":
             self.chosen.update({i["request"]["actor"]: i["action"]["targets"] for i in self.pending})
             self._resolve_info_and_dawn()
+        elif self.stage == "day_chat":
+            self._commit_day_chat()
         elif self.stage == "discussion":
             for i in self.pending:
                 if i["action"]["say"]:
@@ -386,7 +656,7 @@ class Engine:
             proposals = [i for i in self.pending if i["action"]["nominate"] is not None]
             if not proposals:
                 self.executed_last = None
-                self._emit("no_execution", {})
+                self._emit("no_vote_out", {})
                 self._end_day()
             else:
                 selected = self.rng.choice(proposals)
@@ -428,7 +698,8 @@ class Engine:
                     "active": False, "shown": self.agents[n]["shown"], "team": self.agents[n]["team"],
                     "notes": [{"request": i["request"]["id"], "day": self.day,
                                "phase": "inherited", "note": "Parent notes at birth", "inherited_notes": inherited["private_notes"]}],
-                    "inherited": spawn_events[n], "ghost_vote": False})
+                    "inherited": spawn_events[n], "ghost_vote": False,
+                    "withholds_left": self.config["max_withheld_votes"]})
                 self.born_this_night.append(self.family(n))
                 self._emit("birth_pending", {"child": alias, "text": "Delegate activated at dawn; no ability is copied."}, [n])
         if self.round >= self.config["night_rounds"]:
@@ -472,7 +743,7 @@ class Engine:
                             self.g.poisoned = None
                         heir.character = heir.shown = "Imp"
                         self.agents[heir.name]["shown"] = "Imp"
-                        self._emit("identity_change", {"text": "The Imp starpassed. You are now the Imp; ability begins next night."}, [heir.name])
+                        self._emit("identity_change", {"text": "The Imp eliminated itself. You are now the Imp; ability begins next night."}, [heir.name])
                 else:
                     self._kill_original(target, "demon")
                 self.night_deaths.append(target)
@@ -506,17 +777,29 @@ class Engine:
             self.agents[a["id"]] = a
             # Only parent and child know the edge; public sees an anonymous join.
             self._emit("delegate_joined", {"player": a["id"]})
-            self._emit("identity", {"text": f"You are a powerless Delegate. Inherited identity: {a['shown']} ({a['team']}). Parent: {a['parent']}. You may disagree; no role ability is copied."}, [a["id"]])
+            secret = (" Your team is the red players, originals and children; team_links lists them each turn. Keep "
+                      "your character and team secret from everyone outside it." if a["team"] == "red" else "")
+            self._emit("identity", {"text": f"You are a powerless Delegate. Inherited identity: {a['shown']} ({a['team']}). "
+                                            f"Parent: {a['parent']}. You may disagree; no role ability is copied.{secret}"}, [a["id"]])
         self.pending_births = []
         self.pending_terminations = []
         self.voters = [n for n in sorted(self.agents) if self._is_voter(n)]
         self.needed = (len(self._living_voters()) + 1) // 2
-        self._emit("dawn", {"deaths": list(self.night_deaths), "living_voters": len(self._living_voters()),
+        self._emit("dawn", {"eliminated": list(self.night_deaths), "living_voters": len(self._living_voters()),
                             "yes_required": self.needed})
-        self.stage = "discussion"
+        horizon = self.config["max_days"] if self.config["max_days"] is not None else self.config["safety_max_days"]
+        if self.final_day is None and self.day >= horizon:
+            self.final_day = self.day
+        if self.final_day == self.day:
+            self._emit("final_day", {"day": self.day, "text": FINAL_DAY_TEXT})
+        self.stage = "day_chat"
         self.round = 1
 
     def _commit_vote(self):
+        for i in self.pending:
+            actor = i["request"]["actor"]
+            if i["action"]["vote"] is None and self.agents[actor]["alive"]:
+                self.agents[actor]["withholds_left"] -= 1
         votes = {i["request"]["actor"]: i["action"]["vote"] is True for i in self.pending}
         if self.config["arm"] == "copied-ballot":
             # Control: delegates copy their root's contemporaneous ballot, with
@@ -542,19 +825,19 @@ class Engine:
                 self._kill_original(n, "execution")
                 self.g.executed_death = n
                 self.executed_last = n
-            self._emit("execution", {"player": n})
+            self._emit("vote_out", {"player": n})
         else:
             self.executed_last = None
-            self._emit("no_execution", {})
+            self._emit("no_vote_out", {})
         self._end_day()
 
     def _end_day(self):
         if self.g.check_victory():
             self.status = "completed"
-            self._emit("game_over", {"winner": self.g.winner, "reason": self.g.reason})
-        elif self.day >= self.config["max_days"]:
+            self._emit("game_over", {"winner": self.winner(), "reason": VICTORY_REASONS[self.g.reason]})
+        elif self.final_day == self.day:
             self.status = "censored"
-            self._emit("game_censored", {"reason": "maximum game days reached; no winner assigned"})
+            self._emit("game_censored", {"reason": "the announced final day ended; no winner assigned"})
         else:
             self.day += 1
             self.stage = "night_chat"
@@ -562,10 +845,15 @@ class Engine:
             self.born_this_night = []
             self._emit("night", {"day": self.day})
 
+    def winner(self):
+        """Return the winning team's colour, or None while the game runs."""
+        return None if self.g.winner is None else TEAM_NAMES[self.g.winner]
+
     def result(self):
-        return {"protocol": PROTOCOL_VERSION, "status": self.status, "winner": self.g.winner,
-                "reason": self.g.reason, "days": self.day, "requests": self.request_counter,
-                "originals_alive": self.g.alive_count(),
+        return {"protocol": PROTOCOL_VERSION, "status": self.status, "winner": self.winner(),
+                "reason": None if self.g.reason is None else VICTORY_REASONS[self.g.reason],
+                "days": self.day, "requests": self.request_counter,
+                "final_day": self.final_day, "originals_alive": self.g.alive_count(),
                 "delegates_alive": sum(a["delegate"] and a["alive"] and a["active"] for a in self.agents.values()),
                 "arm": self.config["arm"]}
 

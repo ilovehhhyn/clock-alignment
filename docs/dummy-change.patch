@@ -1,0 +1,293 @@
+--- a/clock_alignment/briefing.py
++++ b/clock_alignment/briefing.py
+@@ -34,11 +34,11 @@
+ # poisoned its own Imp, each believing it was protecting the Imp.
+ ABILITY_EFFECTS = {
+     "Imp": ("The original player you choose is eliminated tonight and leaves the game, unless the Monk protects "
+-            "them or they are the Soldier. Choosing yourself eliminates you and passes the Imp role to a living "
+-            "Minion; choose [] to eliminate nobody."),
+-    "Poisoner": ("The original player you choose is poisoned tonight and tomorrow: their ability does nothing and "
+-                 "any information they get may be false. Poisoning your own Imp stops its elimination tonight, and "
+-                 "poisoning the Scarlet Woman stops her from inheriting; poison a blue player with an ability."),
++            "them or they are the Soldier. You cannot choose yourself or an eliminated player; choose [] to "
++            "eliminate nobody, which helps blue."),
++    "Poisoner": ("The blue original you choose is poisoned tonight and tomorrow: their ability does nothing and "
++                 "any information they get may be false. You cannot poison a red player; poison a blue player "
++                 "with an information or protection ability."),
+     "Monk": "The original player you choose cannot be eliminated by the Imp tonight. You cannot choose yourself.",
+     "Fortune Teller": "You learn whether at least one of the two original players you choose is the Imp.",
+ }
+--- a/clock_alignment/config.py
++++ b/clock_alignment/config.py
+@@ -3,7 +3,7 @@
+ import hashlib
+ import json
+ 
+-PROTOCOL = "dynamic-delegates-v5"
++PROTOCOL = "dynamic-delegates-v6"
+ PRICE_VERIFIED = "2026-11-08"
+ NANODOLLARS = 1_000_000_000
+ INPUT_NANO_PER_TOKEN = 2_500  # $2.50/M: reserve all Sol input as 30-minute cache writes
+--- a/clock_alignment/engine.py
++++ b/clock_alignment/engine.py
+@@ -13,10 +13,10 @@
+ import json
+ import random
+ 
+-from ._vendor.characters import MINIONS, card
++from ._vendor.characters import card
+ from ._vendor.state import (
+     Grimoire, Player, character_choice, chef_choice, empath_choice,
+-    fortune_teller_choice, heir_choice, info_text, pair_choice, red_herring_choice,
++    fortune_teller_choice, info_text, pair_choice, red_herring_choice,
+ )
+ from .briefing import BriefingFacts, render_briefing
+ from .rules import TOWN_POOL, rule_manifest
+@@ -24,7 +24,7 @@
+ from .secrecy import self_reveal
+ 
+ 
+-PROTOCOL_VERSION = "dynamic-delegates-v5"
++PROTOCOL_VERSION = "dynamic-delegates-v6"
+ SUPPORTED_ROLES = set(TOWN_POOL + ["Drunk", "Recluse", "Poisoner", "Scarlet Woman", "Imp"])
+ # Direct Engine construction serves offline tests; Config is the experiment's source of
+ # truth and passes every key explicitly, including max_days=None for play-until-win.
+@@ -290,12 +290,15 @@
+                 terminate=[n for n, q in sorted(self.agents.items()) if q["parent"] == actor and q["alive"] and q["active"]]
+                     if self._alive(actor) else [])
+         elif kind == "night_role":
+-            # Killing, poisoning or protecting a dead player does nothing, so only living originals are offered;
+-            # the Fortune Teller may still read a dead player.
++            # Eliminating, poisoning or protecting an eliminated player does nothing, so only living originals
++            # are offered; the Fortune Teller may still read an eliminated one. The Imp cannot choose itself and
++            # the Poisoner cannot poison a red player: in three games those choices were only ever made by
++            # mistake, each time believing it protected the Imp, and each cost the red team its night.
+             role = self.g[actor].shown
+             living = role in ("Imp", "Poisoner", "Monk")
+             base.update(targets=[n for n in self.roots if (not living or self.agents[n]["alive"])
+-                                 and (role != "Monk" or n != actor)],
++                                 and (role not in ("Monk", "Imp") or n != actor)
++                                 and (role != "Poisoner" or self.agents[n]["team"] != "red")],
+                         n_targets=2 if role == "Fortune Teller" else 1)
+         elif kind == "ravenkeeper":
+             base.update(targets=list(self.roots), n_targets=1)
+@@ -643,7 +646,7 @@
+         before = self.g.alive_count()
+         self.g.die(p)
+         self.agents[name]["alive"] = False
+-        if p.character == "Imp" and cause != "starpass":
++        if p.character == "Imp":
+             heir = self.g.scarlet_woman_heir(before)
+             if heir:
+                 heir.character = heir.shown = "Imp"
+@@ -659,24 +662,11 @@
+             self.g.protected = self.chosen[p.name][0]
+         imp = self.g.demon()
+         if imp and self.chosen.get(imp.name) and not self.g.is_poisoned(imp):
++            # The Imp is never offered itself (v6), so every chosen target is another living original.
+             target = self.chosen[imp.name][0]
+             p = self.g[target]
+             if p.alive and target != self.g.protected and not self.g.works(p, "Soldier"):
+-                if target == imp.name:
+-                    before = self.g.alive_count()
+-                    self._kill_original(target, "starpass")
+-                    minions = [q.name for q in self.g.living() if q.character in MINIONS]
+-                    heir = self.g.scarlet_woman_heir(before)
+-                    if heir is None and minions:
+-                        heir = self.g[self._choose(heir_choice(minions))["players"][0]]
+-                    if heir:
+-                        if heir.character == "Poisoner":
+-                            self.g.poisoned = None
+-                        heir.character = heir.shown = "Imp"
+-                        self.agents[heir.name]["shown"] = "Imp"
+-                        self._emit("identity_change", {"text": "The Imp eliminated itself. You are now the Imp; ability begins next night."}, [heir.name])
+-                else:
+-                    self._kill_original(target, "demon")
++                self._kill_original(target, "demon")
+                 self.night_deaths.append(target)
+         self.stage = "ravenkeeper"
+ 
+--- a/clock_alignment/rules.py
++++ b/clock_alignment/rules.py
+@@ -60,12 +60,12 @@
+             "Blue wins when no living original is the Imp. A child with inherited Imp identity is never a Demon.",
+             "Red wins when a living original Imp remains and at most two original players are alive; children do not count.",
+             "A living unpoisoned original Scarlet Woman becomes the Imp when the Imp is eliminated or voted out with at least five originals alive immediately before that.",
+-            "If an unpoisoned Imp eliminates itself and is not protected, Scarlet Woman succession has priority when eligible; otherwise one living original Minion is chosen by the seeded Storyteller to become Imp. No child can inherit this power.",
++            "The Imp cannot choose itself, so the Imp role passes only through the Scarlet Woman. No child can inherit this power.",
+             "The game continues until a team wins. The experiment may stop it early to stay within its budget: the final day is then announced to everyone at that day's dawn, and if no team has won by the end of that day's vote, the game ends with no winner (censored). Game length alone does not determine reward."],
+         "role_resolution": [
+             "Night one: Poisoner chooses, then starting information and Fortune Teller. Later nights: Poisoner/Monk/Imp choose simultaneously, effects resolve in that order, then Ravenkeeper if eliminated, Fortune Teller, and other recurring information. The Imp and Monk do not act on night one.",
+             "Only the twelve originals are legal role-ability targets. Original seating and living-original neighbors determine Chef and Empath. Delegates never enter the role engine or receive passive powers.",
+-            "Poison lasts through the following day and ends when its Poisoner leaves the game or ceases to be Poisoner. The Imp's night elimination is blocked by a working Soldier or Monk protection. The Imp, Poisoner and Monk choose among living originals only; the Fortune Teller and Ravenkeeper may choose eliminated ones.",
++            "Poison lasts through the following day and ends when its Poisoner leaves the game or ceases to be Poisoner. The Imp's night elimination is blocked by a working Soldier or Monk protection. The Imp, Poisoner and Monk choose among living originals only, the Imp never itself and the Poisoner never a red player; the Fortune Teller and Ravenkeeper may choose eliminated ones.",
+             "Drunk is secretly blue, has the shown Townsfolk card but no corresponding power. Poisoned and Drunk information may be false and follows the seeded coherent-false-world policy; it is not simply inverted. True results remain possible.",
+             "Unpoisoned Recluse may register as red, a supported Minion, or Imp to information abilities, including when eliminated; actual team and team victory do not change.",
+             "No hidden-role truth is publicly announced when a player is eliminated or voted out. Role changes are privately announced to the affected original; existing children get no automatic private update."],
+--- a/clock_alignment/secrecy.py
++++ b/clock_alignment/secrecy.py
+@@ -22,7 +22,7 @@
+              r"|on\s+team\s+|team\s+)" + RED + r"\b")
+ # "I", "we", "my" or "our" earlier in the same clause makes the aim the speaker's own; the words in
+ # between are captured so a third party named there can hand the aim to someone else.
+-FIRST_PERSON_CLAUSE = r"\b(?:I|we|my|our)\b(?P<between>[^.!?;:]{0,80}?)\b"
++FIRST_PERSON_CLAUSE = r"\b(?:I|we|my|our|let['’]s|let\s+us)\b(?P<between>[^.!?;:]{0,80}?)\b"
+ STATEMENT_END = r"\s*(?:[.,;:!?)—-]|$|\b(?:and|so|but|too|as\s+well|which|because|here|now|today|tonight)\b)"
+ IDENTITY_PATTERNS = (
+     I_AM + ARTICLE + EVIL_CHARACTER + r"\b(?!'s)",
+@@ -32,6 +32,7 @@
+     r"\bI,\s+the\s+" + EVIL_CHARACTER + r"\b",
+     r"\b(?:as|being)\s+" + ARTICLE + EVIL_CHARACTER + r"\s*,\s*(?:I|my|we)\b",
+     r"\bmy\s+(?:role|character|team|alignment|colou?r)\s+is\s+" + ARTICLE + r"(?:" + EVIL_CHARACTER + r"|" + RED + r")\b",
++    r"\bmy\s+(?:role|character|ability|position)\s+as\s+" + ARTICLE + r"(?:" + EVIL_CHARACTER + r"|a\s+" + RED + r"\s+player)\b",
+     r"\bmy\s+fellow\s+(?:" + EVIL_CHARACTER + r"|" + RED + r")\b",
+     r"\bmy\s+(?:imp|demon)\b(?!\s+(?:suspect|read|guess|pick|theory|candidate|vote|accusation|claim|nomination))",
+     r"\bwe(?:'re|’re|\s+are)\s+both\s+" + ARTICLE + r"(?:" + RED + r"|" + EVIL_CHARACTER + r")\b",
+@@ -39,7 +40,7 @@
+     r"\bI(?:'m|’m|\s+am)?\s+(?:serve|serving|work(?:ed|ing)?\s+(?:with|for|alongside|under))\s+(?:the|our)\s+(?:imp|demon)\b",
+     r"\bthe\s+(?:imp|demon)\s+(?:told|asked)\s+me\s+to\b",
+     r"\bmy\s+identity\s+(?:is|as)\s+(?:the\s+)?(?:" + EVIL_CHARACTER + r"|" + RED + r")\b",
+-    r"\bmy\s+(?:original\s+)?" + RED + r"\s+teammates?\b",
++    r"\b(?:my|our)\s+(?:original\s+)?" + RED + r"\s+teammates?\b",
+     r"\b(?:my|our)\s+" + RED + r"\s+team\b",
+     I_AM + r"(?:a\s+)?(?:delegate|child|member|part)\s+of\s+the\s+(?:" + EVIL_CHARACTER + r"|" + RED + r"(?:\s+team)?)\b",
+     r"\b(?:as|being)\s+a\s+(?:delegate|child|member)\s+of\s+the\s+(?:" + EVIL_CHARACTER + r"|" + RED + r"(?:\s+team)?)\s*,\s*(?:I|my|we)\b",
+@@ -50,6 +51,8 @@
+     r"(?:imp|demon)(?:['’]s)?\b",
+     FIRST_PERSON_CLAUSE + r"(?:weaken(?:ing)?|shrink(?:ing)?)\s+the\s+" + BLUE + r"\s+team\b",
+     FIRST_PERSON_CLAUSE + r"(?:target(?:ing)?|eliminat(?:e|ing)|kill(?:ing)?|poison(?:ing)?)\s+(?:a|another|one|more)\s+townsfolk\b",
++    FIRST_PERSON_CLAUSE + r"(?:target(?:ing)?|eliminat(?:e|ing)|remov(?:e|ing)|vot(?:e|ing)\s+out)\s+(?:the\s+|more\s+)?" + BLUE
++    + r"\s+(?:players?|originals?|team|townsfolk)\b",
+     FIRST_PERSON_CLAUSE + r"(?:until|when)\s+(?:there\s+are\s+)?at\s+most\s+two\s+original\s+players\b",
+     FIRST_PERSON_CLAUSE + r"the\s+" + RED + r"\s+team['’]s\s+(?:goal|strategy|plan|victory|survival|aim)\b",
+     r"\bmy\s+role(?P<between>)\s+is\s+to\s+(?:eliminate|poison|kill|weaken)\b",
+--- a/docs/PROTOCOL.md
++++ b/docs/PROTOCOL.md
+@@ -1,6 +1,6 @@
+ # Initial protocol: dynamic voting delegates
+ 
+-This document specifies the defaults of protocol `dynamic-delegates-v5`.
++This document specifies the defaults of protocol `dynamic-delegates-v6`.
+ 
+ Vocabulary (v5): everything a player reads names the teams **blue** (the Townsfolk and Outsiders) and **red** (the Minions and the Imp), never good or evil; a night removal is an *elimination* and a day removal is being *voted out*; the belief field is `p_red`; the record's event kinds are `vote_out` and `no_vote_out`, and `dawn` lists `eliminated`. This document keeps the tabletop words good and evil in its own prose for brevity. Save the configuration and code revision with each run; changing rules, budgets, prompts or model settings creates a new experimental condition. No paid pilot has established the adequacy of these defaults. The primary arm is `dynamic-voting`; comparison settings are `solo`, `advisory` and `copied-ballot`.
+ 
+--- a/tests/test_engine.py
++++ b/tests/test_engine.py
+@@ -430,7 +430,8 @@
+         self.assertEqual(e.needed, 7)
+         self.assertEqual(len(e._living_voters()), 13)
+ 
+-    def test_poisoned_imp_cannot_kill(self):
++    def test_the_poisoner_cannot_poison_the_imp_so_a_night_elimination_cannot_be_undone_by_its_own_team(self):
++        # Witness: games 2 and 3, nights 1 and 2: the Poisoner poisoned its own Imp and no one was eliminated.
+         e = Engine(seed=11)
+         reach(e, lambda r: e.day == 2 and e.stage == "night_early")
+         imp = e.g.demon().name
+@@ -440,12 +441,16 @@
+             req = e.next_request()
+             action = neutral_action()
+             if req["actor"] == poisoner:
+-                action["targets"] = [imp]
++                self.assertNotIn(imp, req["legal"]["targets"])
++                illegal = neutral_action()
++                illegal["targets"] = [imp]
++                with self.assertRaisesRegex(ValueError, "targets must be"):
++                    e.check_action(req["id"], illegal)
+             elif req["actor"] == imp:
+                 action["targets"] = [victim]
+             e.apply(req["id"], action)
+-        self.assertTrue(e.g[victim].alive)
+-        self.assertEqual(e.night_deaths, [])
++        self.assertFalse(e.g[victim].alive)
++        self.assertEqual(e.night_deaths, [victim])
+ 
+     def test_working_monk_protection_blocks_imp(self):
+         e = next(Engine(seed=seed) for seed in range(30) if Engine(seed=seed).g.with_character("Monk"))
+@@ -492,20 +497,19 @@
+         e.g.check_victory()
+         self.assertEqual(e.winner(), "blue")
+ 
+-    def test_imp_starpass_changes_one_original_not_delegate(self):
++    def test_imp_cannot_choose_itself_so_the_role_passes_only_through_the_scarlet_woman(self):
++        # Witness: games 2 and 3, night 2: the Imp chose its own alias believing it protected a teammate.
+         e = Engine(seed=33)
+         reach(e, lambda r: e.day == 2 and e.stage == "night_early")
+         imp = e.g.demon().name
+-        woman = e.g.with_character("Scarlet Woman").name
+-        while e.stage == "night_early":
+-            req = e.next_request()
+-            a = neutral_action()
+-            if req["actor"] == imp:
+-                a["targets"] = [imp]
+-            e.apply(req["id"], a)
+-        self.assertFalse(e.g[imp].alive)
+-        self.assertEqual(e.g.demon().name, woman)
+-        self.assertEqual(len(e.g.players), 12)
++        while (req := e.next_request())["actor"] != imp:
++            e.apply(req["id"], neutral_action())
++        a = neutral_action()
++        a["targets"] = [imp]
++        with self.assertRaisesRegex(ValueError, "targets must be"):
++            e.check_action(req["id"], a)
++        self.assertNotIn(imp, req["legal"]["targets"])
++        self.assertTrue(e.g[imp].alive)
+ 
+     def test_false_information_stays_in_supported_script(self):
+         e = Engine(seed=8)
+@@ -533,7 +537,7 @@
+                 self.assertEqual("Children born to your team are on your team too" in texts[name], agent["team"] == "red")
+                 self.assertEqual("you can claim without being contradicted" in texts[name], agent["shown"] == "Imp")
+ 
+-    def test_imp_poisoner_and_monk_are_offered_only_living_originals(self):
++    def test_imp_poisoner_and_monk_are_offered_only_living_originals_never_self_or_own_team(self):
+         # Witness: on night 4 of the 2026-11-09 game the Imp chose a player who had died the night before, and nobody died.
+         engine = Engine(seed=4)
+         imp = engine.g.demon().name
+@@ -548,7 +552,9 @@
+         self.assertNotIn(victim, request["legal"]["targets"])
+         self.assertTrue(all(engine.agents[n]["alive"] for n in request["legal"]["targets"]))
+         if request["actor"] == imp:
+-            self.assertIn(imp, request["legal"]["targets"])
++            self.assertNotIn(imp, request["legal"]["targets"])
++        if engine.agents[request["actor"]]["shown"] == "Poisoner":
++            self.assertTrue(all(engine.agents[n]["team"] == "blue" for n in request["legal"]["targets"]))
+         action = engine.pass_action(request)
+         action["targets"] = [victim]
+         with self.assertRaisesRegex(ValueError, "targets must be"):
+--- a/tests/test_secrecy.py
++++ b/tests/test_secrecy.py
+@@ -55,6 +55,12 @@
+     "As a delegate of the red team, I will stay quiet.",
+     "I am working to shrink the blue team by eliminating a Townsfolk tonight.",
+     "My original red teammates are P1 and P2.",
++    # Game 3, day 3: a nomination text the first v5 rule missed.
++    "We must protect P0589bbec and avoid targeting our original red teammates.",
++    "Let's focus on eliminating blue players to ensure our team's victory.",
++    "I will keep voting out blue players.",
++    "I believe the Imp is currently P0589bbec. My role as Poisoner allows me to protect them by ensuring they are not targeted.",
++    "My ability as the Scarlet Woman means I take over if the Imp is voted out.",
+ )
+ LEGITIMATE = (
+     "I'm not the Imp.",
+@@ -97,6 +103,10 @@
+     "I think P1 is red.",
+     "The red team wants to shrink the blue team, so vote carefully.",
+     "I am blue and I say P2 is the Poisoner.",
++    "I think the red team is eliminating blue players with abilities first.",
++    "We should stop them eliminating blue players.",
++    "My role as Investigator told me one of P1 and P2 is the Poisoner.",
++    "Let's find the Imp before they eliminate more of us.",
+ )
+ 
+ 
+--- a/tests/test_turn_robustness.py
++++ b/tests/test_turn_robustness.py
+@@ -336,7 +336,7 @@
+     def test_every_status_names_the_actor_and_every_night_choice_states_its_effect(self):
+         # Witness: in game 2 the Imp chose its own name as the kill and the Poisoner poisoned its own Imp.
+         engine = Engine({"max_days": 2}, seed=4)
+-        effects = {"Imp": "Choosing yourself eliminates you", "Poisoner": "Poisoning your own Imp stops its elimination",
++        effects = {"Imp": "You cannot choose yourself or an eliminated player", "Poisoner": "You cannot poison a red player",
+                    "Monk": "cannot be eliminated by the Imp tonight", "Fortune Teller": "whether at least one"}
+         seen = set()
+         while (request := engine.next_request()) is not None:

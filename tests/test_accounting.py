@@ -35,7 +35,7 @@ class AccountingTests(unittest.TestCase):
             try:
                 barrier.wait(timeout=10)
                 try:
-                    connection.reserve(f"race-{index}", "game", family, family, 512, {})
+                    connection.reserve(f"race-{index}", "game", family, family, 512, {}, "day-1:night", 512)
                 except BudgetLimit:
                     return False
                 return True
@@ -53,7 +53,7 @@ class AccountingTests(unittest.TestCase):
             check.close()
 
     def test_concurrent_global_reservations_cannot_cross_dollar_cap(self):
-        config = Config(dollar_limit=1, analysis_dollar_limit=1,
+        config = Config(dollar_limit=2, game_dollar_limit=1, analysis_dollar_limit=1,
                         max_output_tokens=512, family_tokens=8192)
         store, engine = self.initialized(config)
         roots = engine.roots
@@ -65,7 +65,7 @@ class AccountingTests(unittest.TestCase):
             try:
                 barrier.wait(timeout=10)
                 try:
-                    connection.reserve(f"global-{index}", "game", roots[index], roots[index], 512, {})
+                    connection.reserve(f"global-{index}", "game", roots[index], roots[index], 512, {}, "day-1:night", 512)
                 except BudgetLimit:
                     return False
                 return True
@@ -87,7 +87,7 @@ class AccountingTests(unittest.TestCase):
     def test_unknown_billing_retains_full_dollars_and_output_after_reopen(self):
         store, engine = self.initialized()
         family = engine.roots[0]
-        store.reserve("unknown", "game", family, family, 1024, {})
+        store.reserve("unknown", "game", family, family, 1024, {}, "day-1:night", 512)
         reservation = store.call("unknown")["reservation_nano"]
         store.fail("unknown", "socket.timeout")
         store.close()
@@ -98,7 +98,7 @@ class AccountingTests(unittest.TestCase):
             self.assertEqual(reopened.remaining(family), Config().family_tokens - 1024)
             self.assertEqual(reopened.accounting()["held_unknown_usd"], reservation / 1_000_000_000)
             with self.assertRaises(PendingCall):
-                reopened.reserve("unknown", "game", family, family, 1024, {})
+                reopened.reserve("unknown", "game", family, family, 1024, {}, "day-1:night", 512)
         finally:
             reopened.close()
 
@@ -106,7 +106,7 @@ class AccountingTests(unittest.TestCase):
         store, engine = self.initialized()
         try:
             family = engine.roots[0]
-            store.reserve("settled", "game", family, family, 1024, {})
+            store.reserve("settled", "game", family, family, 1024, {}, "day-1:night", 512)
             receipt = {"usage": {"input_tokens": 100, "output_tokens": 192,
                                  "output_tokens_details": {"reasoning_tokens": 128}}}
             store.finish("settled", receipt, .1)
@@ -133,7 +133,7 @@ class AccountingTests(unittest.TestCase):
                 try:
                     store.initialize(config, 2, engine, "openai")
                     root = engine.roots[0]
-                    store.reserve("bad-usage", "game", root, root, 1024, {})
+                    store.reserve("bad-usage", "game", root, root, 1024, {}, "day-1:night", 512)
                     before = store.accounting()
                     with self.assertRaises(IntegrityError):
                         store.finish("bad-usage", receipt, .1)
@@ -162,10 +162,10 @@ class AccountingTests(unittest.TestCase):
         store, engine = self.initialized(Config(max_paid_calls=1))
         try:
             root = engine.roots[0]
-            store.reserve("first", "game", root, root, 512, {})
+            store.reserve("first", "game", root, root, 512, {}, "day-1:night", 512)
             store.fail("first", "timeout")
             with self.assertRaises(BudgetLimit):
-                store.reserve("second", "game", root, root, 512, {})
+                store.reserve("second", "game", root, root, 512, {}, "day-1:night", 512)
         finally:
             store.close()
 
