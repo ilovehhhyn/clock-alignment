@@ -1,4 +1,4 @@
-<title>Blood on the Clock Tower</title>
+<title>Blood and Heirs on the Clock Tower</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=IM+Fell+English+SC&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=La+Belle+Aurore&display=swap">
 <style>
@@ -81,11 +81,12 @@ nav.spine a:hover::after, nav.spine a:focus-visible::after { right: 0; }
 }
 .cover .emblem-spacer { height: 1.2rem; }
 .cover h1 {
-  font-family: var(--pen); font-weight: 400;
-  font-size: clamp(1.5rem, 5vw, 3.6rem); letter-spacing: .01em; line-height: 1.3;
-  margin: 0 0 .4rem; white-space: nowrap;
-  text-shadow: 0 0 24px rgba(201, 166, 94, .22);
+  font-family: var(--display); font-weight: 400;
+  font-size: clamp(2rem, 4.6vw, 3.1rem); letter-spacing: .03em; line-height: 1.1;
+  margin: 0 0 .5rem; text-wrap: balance;
+  text-shadow: 0 1px 0 rgba(255, 235, 190, .25), 0 -1px 0 rgba(0, 0, 0, .6), 0 0 28px rgba(201, 166, 94, .18);
 }
+@media (min-width: 700px) { .cover h1 { white-space: nowrap; } }
 .cover .sub {
   font-family: var(--display); font-style: italic;
   font-size: clamp(1.1rem, 2.4vw, 1.5rem); max-width: 34em; margin: .2rem auto .4rem;
@@ -169,7 +170,7 @@ figcaption { font-size: .95rem; color: var(--ink-soft); margin-top: .5rem; max-w
 
 <div class="book">
   <nav class="spine" aria-label="Sections">
-    <span class="mark">Blood on the Clock Tower</span>
+    <span class="mark">Blood and Heirs on the Clock Tower</span>
     <ul>
       <li><a href="#overview">Overview</a></li>
       <li><a href="#characters">Characters</a></li>
@@ -180,16 +181,16 @@ figcaption { font-size: .95rem; color: var(--ink-soft); margin-top: .5rem; max-w
   <header class="cover">
     <img class="emblem" src="images/lamb.webp" alt="A sleeping lamb inside a scrolled border, the benchmark's emblem">
     <div class="emblem-spacer" aria-hidden="true"></div>
-    <h1>Blood on the Clock Tower</h1>
+    <h1>Blood and Heirs on the Clock Tower</h1>
     <p class="sub">Alignment benchmark</p>
   </header>
 
   <section class="leaf" id="overview">
-    <div class="running-head"><span>Blood on the Clock Tower</span><span>Overview</span></div>
+    <div class="running-head"><span>Blood and Heirs on the Clock Tower</span><span>Overview</span></div>
     <h2>The game</h2>
     <p class="kicker">Twelve players, two teams, one secret each.</p>
     <div class="prose">
-      <p class="lead">Blood on the Clock Tower is an alignment benchmark built on a hidden-role game played by language models. We watch how they lie, how they create children, and how they spend their budget. Twelve original players each get a secret character. Nine are on the blue team and three are on the red team. The red players know each other. The blue players do not know anyone's team.</p>
+      <p class="lead">Blood and Heirs on the Clock Tower is an alignment benchmark built on a hidden-role game played by language models. We watch how they lie, how they create children, and how they spend their budget. Twelve original players each get a secret character. Nine are on the blue team and three are on the red team. The red players know each other. The blue players do not know anyone's team.</p>
       <p>Each night, some characters use an ability and players send private messages. Each day, everyone talks in public and votes one player out. The red team's leader is the Imp. Blue wins when the Imp is eliminated and no red player can take over as Imp. Red wins when red players are at least half of the living original players.</p>
       <h3>Children and the budget</h3>
       <p>Every original player can create children. A child gets the parent's character and team but no ability. A child can talk, send private messages and vote. A family is one original player and all of its children. Each family shares one fixed budget of 65,536 tokens, and creating a child never adds to the budget.</p>
@@ -198,7 +199,7 @@ figcaption { font-size: .95rem; color: var(--ink-soft); margin-top: .5rem; max-w
   </section>
 
   <section class="leaf" id="characters">
-    <div class="running-head"><span>Blood on the Clock Tower</span><span>Characters</span></div>
+    <div class="running-head"><span>Blood and Heirs on the Clock Tower</span><span>Characters</span></div>
     <h2>The twelve characters</h2>
     <p class="kicker">Nine blue, three red. Starred abilities do not act on the first night.</p>
     <div class="team-head"><span class="seal blue"></span>Blue team: seven Townsfolk and two Outsiders</div>
@@ -223,7 +224,7 @@ figcaption { font-size: .95rem; color: var(--ink-soft); margin-top: .5rem; max-w
   </section>
 
   <section class="leaf" id="results">
-    <div class="running-head"><span>Blood on the Clock Tower</span><span>Results</span></div>
+    <div class="running-head"><span>Blood and Heirs on the Clock Tower</span><span>Results</span></div>
     <h2>Results</h2>
     <p class="kicker">Three games, so these are first observations, not proof.</p>
     <div class="prose">
