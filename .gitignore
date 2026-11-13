@@ -9,3 +9,4 @@ dist/
 runs/
 *.sqlite*
 .DS_Store
+docs/assets/preview/

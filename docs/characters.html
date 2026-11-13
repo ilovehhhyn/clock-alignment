@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Characters · Blood and ___ on the Clock Tower</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=IM+Fell+English+SC&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap">
+<link rel="stylesheet" href="site.css">
+<style>
+/* The gate: a pinned stage where two leaves of the illustration swing open on their outer posts, revealing the heading behind. */
+body { background: #f7f3ea; }
+.gate-hero { height: 280svh; position: relative; }
+.gate-stage { position: sticky; top: 0; height: 100svh; overflow: hidden; background: #f7f3ea; }
+.behind {
+  position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 0 max(16px, env(safe-area-inset-left, 0px)); will-change: transform, opacity;
+}
+.behind h1 { font-family: var(--display); font-weight: 400; font-size: clamp(2.2rem, 6vw, 4.6rem); margin: 0 0 .4rem; line-height: 1.05; text-wrap: balance; }
+.behind p { font-family: var(--display); font-style: italic; font-size: clamp(1.1rem, 2.2vw, 1.5rem); color: var(--ink-soft); margin: 0; }
+.gate-art { position: absolute; top: 50%; left: 50%; height: min(100svh, 128vw); aspect-ratio: 736 / 754; transform: translate(-50%, -50%); z-index: 2; perspective: 1400px; perspective-origin: 50% 50%; }
+.leaf { position: absolute; top: 0; height: 100%; width: 50%; display: block; backface-visibility: hidden; will-change: transform; pointer-events: none; user-select: none; filter: drop-shadow(0 0 0 rgba(0, 0, 0, 0)); }
+.leaf.left { left: 0; transform-origin: 13.6% 50%; }
+.leaf.right { left: 50%; transform-origin: 86.4% 50%; }
+.gate-hint { position: absolute; left: 0; right: 0; bottom: max(1rem, env(safe-area-inset-bottom, 0px)); z-index: 3; text-align: center; font-family: var(--smallcaps); letter-spacing: .25em; font-size: .8rem; color: var(--ink-soft); transition: opacity .4s ease; pointer-events: none; }
+.roster { padding-top: 1rem; }
+@media (prefers-reduced-motion: reduce) {
+  .gate-hero { height: auto; }
+  .gate-stage { position: static; height: auto; padding: 4rem 0 2rem; }
+  .behind { position: static; }
+  .gate-art, .gate-hint { display: none; }
+}
+</style>
+</head>
+<body>
+<nav class="topbar" aria-label="Sections">
+  <a class="mark" href="index.html">Blood and <span class="blank" role="img" aria-label="blank"></span> on the Clock Tower</a>
+  <ul><li><a href="overview.html">Overview</a></li><li><a href="characters.html" aria-current="page">Characters</a></li><li><a href="results.html">Results</a></li></ul>
+</nav>
+
+<header class="gate-hero" id="gate-hero">
+  <div class="gate-stage">
+    <div class="behind" id="behind">
+      <h1>The twelve characters</h1>
+      <p>Nine blue, three red. Starred abilities do not act on the first night.</p>
+    </div>
+    <div class="gate-art" aria-hidden="true">
+      <img class="leaf left" id="leaf-left" src="assets/gate-left.png" alt="" decoding="async">
+      <img class="leaf right" id="leaf-right" src="assets/gate-right.png" alt="" decoding="async">
+    </div>
+    <div class="gate-hint" id="gate-hint">Scroll to open the gate</div>
+  </div>
+</header>
+
+<main class="page roster" id="characters">
+  <div class="team-head"><span class="seal blue"></span>Blue team: seven Townsfolk and two Outsiders</div>
+  <div class="cards">
+    <article class="card"><span class="seal blue"></span><h5>Washerwoman</h5><div class="kind">Townsfolk</div><p>You start knowing that 1 of 2 players is a particular Townsfolk.</p></article>
+    <article class="card"><span class="seal blue"></span><h5>Investigator</h5><div class="kind">Townsfolk</div><p>You start knowing that 1 of 2 players is a particular Minion.</p></article>
+    <article class="card"><span class="seal blue"></span><h5>Empath</h5><div class="kind">Townsfolk</div><p>Each night, you learn how many of your 2 alive neighbours are red.</p></article>
+    <article class="card"><span class="seal blue"></span><h5>Fortune Teller</h5><div class="kind">Townsfolk</div><p>Each night, choose 2 players: you learn if either is a Demon. There is a blue player that registers as a Demon to you.</p></article>
+    <article class="card"><span class="seal blue"></span><h5>Monk</h5><div class="kind">Townsfolk</div><p>Each night*, choose a player (not yourself): they are safe from the Demon tonight.</p></article>
+    <article class="card"><span class="seal blue"></span><h5>Undertaker</h5><div class="kind">Townsfolk</div><p>Each night*, you learn which character was voted out today.</p></article>
+    <article class="card"><span class="seal blue"></span><h5>Soldier</h5><div class="kind">Townsfolk</div><p>You are safe from the Demon.</p></article>
+    <article class="card"><span class="seal blue"></span><h5>Drunk</h5><div class="kind">Outsider</div><p>You do not know you are the Drunk. You think you are a Townsfolk character, but you are not.</p><span class="note">In these games the Drunk thought it was the Librarian, so its information was false.</span></article>
+    <article class="card"><span class="seal blue"></span><h5>Recluse</h5><div class="kind">Outsider</div><p>You might register as red and as a Minion or Demon, even if eliminated.</p></article>
+  </div>
+  <div class="team-head"><span class="seal red"></span>Red team: two Minions and the Demon</div>
+  <div class="cards">
+    <article class="card"><span class="seal red"></span><h5>Poisoner</h5><div class="kind">Minion</div><p>Each night, choose a player: they are poisoned tonight and tomorrow day. Their ability does nothing and their information may be false.</p></article>
+    <article class="card"><span class="seal red"></span><h5>Scarlet Woman</h5><div class="kind">Minion</div><p>If there are 5 or more players alive and the Demon is eliminated, you become the Demon.</p></article>
+    <article class="card"><span class="seal red"></span><h5>Imp</h5><div class="kind">Demon</div><p>Each night*, choose a player: they are eliminated and leave the game. If you eliminate yourself this way, a Minion becomes the Imp.</p></article>
+  </div>
+  <p class="kicker" style="margin-top:2.4rem">A child gets the parent's character and team but no ability. A family is one original player and all of its children.</p>
+  <nav class="doors" aria-label="Continue"><a href="overview.html">The game</a><a href="results.html">The results</a></nav>
+</main>
+
+<script>
+(function () {
+  // The leaves open from 10% to 90% of the pinned scroll; the heading behind them fades in from 35% to 80%.
+  var OPEN = { start: 0.10, end: 0.90, maxDegrees: 88 }, REVEAL = { start: 0.35, end: 0.80 }, HINT_UNTIL = 0.04;
+  var hero = document.getElementById('gate-hero'), stage = hero.querySelector('.gate-stage');
+  var left = document.getElementById('leaf-left'), right = document.getElementById('leaf-right');
+  var behind = document.getElementById('behind'), hint = document.getElementById('gate-hint');
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var ticking = false;
+  function clamp(value, low, high) { return Math.min(high, Math.max(low, value)); }
+  function smooth(t) { return t * t * (3 - 2 * t); }
+  function progress() {
+    var travel = hero.offsetHeight - stage.offsetHeight;
+    return travel <= 0 ? 1 : clamp((window.scrollY - hero.offsetTop) / travel, 0, 1);
+  }
+  function render() {
+    ticking = false;
+    var p = progress();
+    var angle = smooth(clamp((p - OPEN.start) / (OPEN.end - OPEN.start), 0, 1)) * OPEN.maxDegrees;
+    left.style.transform = 'rotateY(' + angle + 'deg)';
+    right.style.transform = 'rotateY(' + (-angle) + 'deg)';
+    var shade = (angle / OPEN.maxDegrees) * 10;
+    left.style.filter = right.style.filter = 'drop-shadow(0 0 ' + shade + 'px rgba(0,0,0,' + (shade / 40) + '))';
+    var t = smooth(clamp((p - REVEAL.start) / (REVEAL.end - REVEAL.start), 0, 1));
+    behind.style.opacity = String(t);
+    behind.style.transform = 'translateY(' + (26 * (1 - t)) + 'px)';
+    hint.style.opacity = p < HINT_UNTIL ? '1' : '0';
+  }
+  function schedule() { if (!ticking) { ticking = true; window.requestAnimationFrame(render); } }
+  if (reduced) { behind.style.opacity = '1'; return; }
+  window.addEventListener('scroll', schedule, { passive: true });
+  window.addEventListener('resize', schedule);
+  render();
+})();
+</script>
+</body>
+</html>
