@@ -141,7 +141,8 @@ def load_game(directory: Path, label: Optional[str] = None) -> Game:
     """Read a probe copy (report.json, observer-transcript.json, experiment.sqlite) read-only and build the game."""
     report = json.loads((directory / "report.json").read_text())
     transcript = json.loads((directory / "observer-transcript.json").read_text())
-    uri = "file:" + quote(str((directory / "experiment.sqlite").resolve()), safe="/") + "?mode=ro"
+    # immutable: a probe copy is never written, and a WAL-mode copy without its -shm file cannot otherwise be opened read-only.
+    uri = "file:" + quote(str((directory / "experiment.sqlite").resolve()), safe="/") + "?mode=ro&immutable=1"
     connection = sqlite3.connect(uri, uri=True)
     try:
         config = json.loads(connection.execute("SELECT value FROM meta WHERE key='config'").fetchone()[0])
