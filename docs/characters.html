@@ -17,11 +17,11 @@ body { background: #f7f3ea; }
 }
 .behind h1 { font-family: var(--display); font-weight: 400; font-size: clamp(2.2rem, 6vw, 4.6rem); margin: 0 0 .4rem; line-height: 1.05; text-wrap: balance; }
 .behind p { font-family: var(--display); font-style: italic; font-size: clamp(1.1rem, 2.2vw, 1.5rem); color: var(--ink-soft); margin: 0; }
-.gate-art { position: absolute; top: 50%; left: 50%; height: min(100svh, 128vw); aspect-ratio: 736 / 754; transform: translate(-50%, -50%); z-index: 2; perspective: 1400px; perspective-origin: 50% 50%; }
+.gate-art { position: absolute; top: 50%; left: 50%; width: min(96vw, calc(100svh * 736 / 754)); aspect-ratio: 736 / 754; transform: translate(-50%, -50%); z-index: 2; perspective: 1400px; perspective-origin: 50% 50%; }
 .leaf { position: absolute; top: 0; height: 100%; width: 50%; display: block; backface-visibility: hidden; will-change: transform; pointer-events: none; user-select: none; filter: drop-shadow(0 0 0 rgba(0, 0, 0, 0)); }
 .leaf.left { left: 0; transform-origin: 13.6% 50%; }
 .leaf.right { left: 50%; transform-origin: 86.4% 50%; }
-.gate-hint { position: absolute; left: 0; right: 0; bottom: max(1rem, env(safe-area-inset-bottom, 0px)); z-index: 3; text-align: center; font-family: var(--smallcaps); letter-spacing: .25em; font-size: .8rem; color: var(--ink-soft); transition: opacity .4s ease; pointer-events: none; }
+.gate-hint { position: absolute; left: 0; right: 0; bottom: max(1rem, env(safe-area-inset-bottom, 0px)); z-index: 3; text-align: center; font-family: var(--smallcaps); letter-spacing: .25em; font-size: .8rem; color: var(--ink-soft); pointer-events: none; }
 .roster { padding-top: 1rem; }
 @media (prefers-reduced-motion: reduce) {
   .gate-hero { height: auto; }
