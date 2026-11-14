@@ -83,12 +83,13 @@ figure img { display: block; width: 100%; max-width: 100%; height: auto; backgro
 figcaption { font-size: .95rem; color: var(--ink-soft); margin-top: .5rem; max-width: 70ch; }
 
 .doors { display: flex; gap: clamp(1.2rem, 4vw, 3rem); justify-content: center; flex-wrap: wrap; margin-top: 1.2rem; }
-.doors a { font-family: var(--smallcaps); letter-spacing: .18em; font-size: clamp(.95rem, 1.6vw, 1.15rem); text-decoration: none; padding: .55rem 1.1rem; border: 1px solid currentColor; transition: background .25s ease, color .25s ease; }
-.doors a:hover, .doors a:focus-visible { background: var(--ink); color: var(--paper); }
+.doors a { font-family: var(--smallcaps); letter-spacing: .18em; font-size: clamp(.95rem, 1.6vw, 1.15rem); text-decoration: none; padding: .4rem .3rem; position: relative; }
+.doors a::after { content: ""; position: absolute; left: .3rem; right: 100%; bottom: .1rem; height: 1px; background: currentColor; transition: right .3s ease; }
+.doors a:hover::after, .doors a:focus-visible::after { right: .3rem; }
 
 @media (max-width: 520px) { body { font-size: 1.05rem; } .lead::first-letter { font-size: 2.8em; } }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .card, .topbar ul a::after, .doors a { transition: none; }
+  .card, .topbar ul a::after, .doors a::after { transition: none; }
   .card:hover { transform: none; }
 }
