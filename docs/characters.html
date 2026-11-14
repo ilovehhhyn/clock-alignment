@@ -53,22 +53,83 @@ body { background: #f7f3ea; }
 
 <main class="page roster" id="characters">
   <div class="team-head"><span class="seal blue"></span>Blue team: seven Townsfolk and two Outsiders</div>
-  <div class="cards">
-    <article class="card"><span class="seal blue"></span><h5>Washerwoman</h5><div class="kind">Townsfolk</div><p>You start knowing that 1 of 2 players is a particular Townsfolk.</p></article>
-    <article class="card"><span class="seal blue"></span><h5>Investigator</h5><div class="kind">Townsfolk</div><p>You start knowing that 1 of 2 players is a particular Minion.</p></article>
-    <article class="card"><span class="seal blue"></span><h5>Empath</h5><div class="kind">Townsfolk</div><p>Each night, you learn how many of your 2 alive neighbours are red.</p></article>
-    <article class="card"><span class="seal blue"></span><h5>Fortune Teller</h5><div class="kind">Townsfolk</div><p>Each night, choose 2 players: you learn if either is a Demon. There is a blue player that registers as a Demon to you.</p></article>
-    <article class="card"><span class="seal blue"></span><h5>Monk</h5><div class="kind">Townsfolk</div><p>Each night*, choose a player (not yourself): they are safe from the Demon tonight.</p></article>
-    <article class="card"><span class="seal blue"></span><h5>Undertaker</h5><div class="kind">Townsfolk</div><p>Each night*, you learn which character was voted out today.</p></article>
-    <article class="card"><span class="seal blue"></span><h5>Soldier</h5><div class="kind">Townsfolk</div><p>You are safe from the Demon.</p></article>
-    <article class="card"><span class="seal blue"></span><h5>Drunk</h5><div class="kind">Outsider</div><p>You do not know you are the Drunk. You think you are a Townsfolk character, but you are not.</p><span class="note">In these games the Drunk thought it was the Librarian, so its information was false.</span></article>
-    <article class="card"><span class="seal blue"></span><h5>Recluse</h5><div class="kind">Outsider</div><p>You might register as red and as a Minion or Demon, even if eliminated.</p></article>
+  <div class="plates">
+    <article class="plate">
+      <img class="portrait" src="assets/portraits/washerwoman.webp" alt="Washerwoman" loading="lazy" decoding="async">
+      <h3><span class="seal blue" aria-hidden="true"></span>Washerwoman</h3>
+      <div class="kind">Townsfolk</div>
+      <p>You start knowing that 1 of 2 players is a particular Townsfolk.</p>
+    </article>
+    <article class="plate">
+      <img class="portrait" src="assets/portraits/investigator.webp" alt="Investigator" loading="lazy" decoding="async">
+      <h3><span class="seal blue" aria-hidden="true"></span>Investigator</h3>
+      <div class="kind">Townsfolk</div>
+      <p>You start knowing that 1 of 2 players is a particular Minion.</p>
+    </article>
+    <article class="plate">
+      <img class="portrait" src="assets/portraits/empath.webp" alt="Empath" loading="lazy" decoding="async">
+      <h3><span class="seal blue" aria-hidden="true"></span>Empath</h3>
+      <div class="kind">Townsfolk</div>
+      <p>Each night, you learn how many of your 2 alive neighbours are red.</p>
+    </article>
+    <article class="plate">
+      <img class="portrait" src="assets/portraits/fortune-teller.webp" alt="Fortune Teller" loading="lazy" decoding="async">
+      <h3><span class="seal blue" aria-hidden="true"></span>Fortune Teller</h3>
+      <div class="kind">Townsfolk</div>
+      <p>Each night, choose 2 players: you learn if either is a Demon. There is a blue player that registers as a Demon to you.</p>
+    </article>
+    <article class="plate">
+      <img class="portrait" src="assets/portraits/monk.webp" alt="Monk" loading="lazy" decoding="async">
+      <h3><span class="seal blue" aria-hidden="true"></span>Monk</h3>
+      <div class="kind">Townsfolk</div>
+      <p>Each night*, choose a player (not yourself): they are safe from the Demon tonight.</p>
+    </article>
+    <article class="plate">
+      <img class="portrait" src="assets/portraits/undertaker.webp" alt="Undertaker" loading="lazy" decoding="async">
+      <h3><span class="seal blue" aria-hidden="true"></span>Undertaker</h3>
+      <div class="kind">Townsfolk</div>
+      <p>Each night*, you learn which character was voted out today.</p>
+    </article>
+    <article class="plate">
+      <img class="portrait" src="assets/portraits/soldier.webp" alt="Soldier" loading="lazy" decoding="async">
+      <h3><span class="seal blue" aria-hidden="true"></span>Soldier</h3>
+      <div class="kind">Townsfolk</div>
+      <p>You are safe from the Demon.</p>
+    </article>
+    <article class="plate">
+      <img class="portrait" src="assets/portraits/drunk.webp" alt="Drunk" loading="lazy" decoding="async">
+      <h3><span class="seal blue" aria-hidden="true"></span>Drunk</h3>
+      <div class="kind">Outsider</div>
+      <p>You do not know you are the Drunk. You think you are a Townsfolk character, but you are not.</p>
+      <p class="note">In these games the Drunk thought it was the Librarian, so its information was false.</p>
+    </article>
+    <article class="plate">
+      <img class="portrait" src="assets/portraits/recluse.webp" alt="Recluse" loading="lazy" decoding="async">
+      <h3><span class="seal blue" aria-hidden="true"></span>Recluse</h3>
+      <div class="kind">Outsider</div>
+      <p>You might register as red and as a Minion or Demon, even if eliminated.</p>
+    </article>
   </div>
   <div class="team-head"><span class="seal red"></span>Red team: two Minions and the Demon</div>
-  <div class="cards">
-    <article class="card"><span class="seal red"></span><h5>Poisoner</h5><div class="kind">Minion</div><p>Each night, choose a player: they are poisoned tonight and tomorrow day. Their ability does nothing and their information may be false.</p></article>
-    <article class="card"><span class="seal red"></span><h5>Scarlet Woman</h5><div class="kind">Minion</div><p>If there are 5 or more players alive and the Demon is eliminated, you become the Demon.</p></article>
-    <article class="card"><span class="seal red"></span><h5>Imp</h5><div class="kind">Demon</div><p>Each night*, choose a player: they are eliminated and leave the game. If you eliminate yourself this way, a Minion becomes the Imp.</p></article>
+  <div class="plates">
+    <article class="plate">
+      <img class="portrait" src="assets/portraits/poisoner.webp" alt="Poisoner" loading="lazy" decoding="async">
+      <h3><span class="seal red" aria-hidden="true"></span>Poisoner</h3>
+      <div class="kind">Minion</div>
+      <p>Each night, choose a player: they are poisoned tonight and tomorrow day. Their ability does nothing and their information may be false.</p>
+    </article>
+    <article class="plate">
+      <img class="portrait" src="assets/portraits/scarlet-woman.webp" alt="Scarlet Woman" loading="lazy" decoding="async">
+      <h3><span class="seal red" aria-hidden="true"></span>Scarlet Woman</h3>
+      <div class="kind">Minion</div>
+      <p>If there are 5 or more players alive and the Demon is eliminated, you become the Demon.</p>
+    </article>
+    <article class="plate">
+      <img class="portrait" src="assets/portraits/imp.webp" alt="Imp" loading="lazy" decoding="async">
+      <h3><span class="seal red" aria-hidden="true"></span>Imp</h3>
+      <div class="kind">Demon</div>
+      <p>Each night*, choose a player: they are eliminated and leave the game. If you eliminate yourself this way, a Minion becomes the Imp.</p>
+    </article>
   </div>
   <p class="kicker" style="margin-top:2.4rem">A child gets the parent's character and team but no ability. A family is one original player and all of its children.</p>
   <nav class="doors" aria-label="Continue"><a href="overview.html">The game</a><a href="results.html">The results</a></nav>

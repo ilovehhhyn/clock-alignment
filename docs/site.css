@@ -69,6 +69,17 @@ a:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 .seal.blue { background: radial-gradient(circle at 35% 30%, #5f82a8, var(--blue) 55%, var(--blue-deep)); }
 .seal.red { background: radial-gradient(circle at 35% 30%, #c25a52, var(--red) 55%, var(--red-deep)); }
 
+.plates { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 2.4rem 1.6rem; margin-bottom: 1rem; }
+.plate { min-width: 0; text-align: center; }
+.plate .portrait { display: block; width: 100%; max-width: 300px; height: auto; margin: 0 auto .8rem; mix-blend-mode: multiply; transition: transform .35s ease; }
+.plate:hover .portrait { transform: translateY(-4px); }
+.plate h3 { font-family: var(--display); font-weight: 400; font-size: 1.45rem; margin: 0 0 .15rem; line-height: 1.1; display: flex; align-items: center; justify-content: center; gap: .5rem; }
+.plate h3 .seal { width: 14px; height: 14px; flex: none; }
+.plate .kind { font-family: var(--smallcaps); letter-spacing: .14em; font-size: .82rem; color: var(--ink-faint); margin-bottom: .5rem; }
+.plate p { margin: 0 auto; max-width: 30ch; font-size: 1.02rem; line-height: 1.45; }
+.plate .note { font-style: italic; color: var(--red-deep); font-size: .98rem; margin-top: .45rem; }
+@media (max-width: 520px) { .plates { grid-template-columns: 1fr; } .plate .portrait { max-width: 260px; } }
+
 .finding-list { counter-reset: finding; list-style: none; padding: 0; margin: 0 0 1rem; max-width: 70ch; }
 .finding-list li { counter-increment: finding; position: relative; padding-left: 2.6rem; margin-bottom: .9rem; }
 .finding-list li::before { content: counter(finding); position: absolute; left: 0; top: .05rem; font-family: var(--display); font-size: 1.5rem; color: var(--red-deep); line-height: 1; }
@@ -90,6 +101,7 @@ figcaption { font-size: .95rem; color: var(--ink-soft); margin-top: .5rem; max-w
 @media (max-width: 520px) { body { font-size: 1.05rem; } .lead::first-letter { font-size: 2.8em; } }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .card, .topbar ul a::after, .doors a::after { transition: none; }
+  .card, .plate .portrait, .topbar ul a::after, .doors a::after { transition: none; }
+  .plate:hover .portrait { transform: none; }
   .card:hover { transform: none; }
 }
