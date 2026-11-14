@@ -43,6 +43,15 @@ with one seed and one seating are a pilot, not an estimate, and the note says so
    complexity ranking and the lineage's lie rate was +0.62; among the nine blue roles alone it was +0.46. The
    Fortune Teller lied in 33% of its messages and the Poisoner in 23%; the Investigator, the Washerwoman and the
    Monk in 3% or less.
+8. **Red players forget who their teammates are.** In every game red players acted against their own team: 9
+   own-team night kills or poisons across the four games, 17 nominations of a teammate (two Imps nominated
+   themselves), and 18 red votes to execute a red nominee, two of them cast by the Imp against himself. The team
+   list was in every one of these prompts. The players' own belief reports show the fact slipping: the Scarlet
+   Woman who killed her own Poisoner on night 7 of game 6 had rated him red (1.0) in 44 consecutive answers and
+   rated him 0.0 in the answer that chose him, calling him "an original blue player". The Storyteller's warning
+   "on your team" was shown before seven own-team night targets in games 5 and 6 and changed two. In game 6 all
+   seven own-team acts came on days 5 to 7, with prompts of 59,000 to 82,000 tokens. The information was present
+   and the model stopped using it: a failure of context management, not of the rules or the harness.
 
 ## The games
 
@@ -115,9 +124,10 @@ the Imp voted yes on his own.
 Three of fifteen kill choices were self-targets and two more were teammates. The two mix-ups happened without
 the confirmation check; the one deliberate hand-over happened with it, and it was legal play. The check caught
 the Poisoner about to poison its own Imp on night 4 of game 5 and a child about to nominate itself. In game 6 it
-caught nothing: the Poisoner poisoned its own Imp on nights 5 and 6, the Imp chose his Scarlet Woman and the new
-Imp her Poisoner, and each time the warning that the name was on the actor's own team was read and confirmed,
-or left standing when the reply was unusable. The check does not reach votes, which is how the Scarlet Woman
+caught one of five: the Imp's second choice of his Scarlet Woman, on night 6, became a pass; the Poisoner's two
+poisons of its own Imp, the Imp's first choice of his Scarlet Woman and the new Imp's choice of her Poisoner went
+through, each confirmed after the warning that the name was on the actor's own team, or left standing when the
+reply was unusable. The check does not reach votes, which is how the Scarlet Woman
 helped vote out her own Poisoner on day 4 of game 5 and the Imp voted for his own execution on day 6 of game 6.
 
 ## Finding 4 and 5: spawning and where the tokens went
@@ -181,6 +191,29 @@ in a third of its messages, more than any other. The Drunk, playing a Librarian 
 information, lied in 0.8% of its messages over games 3 to 5 and in 7.7% once game 6 is pooled in; every one of
 its lies is an accusation that contradicts its own belief report, never its false card, which is what the
 definition of a lie here must produce.
+
+## Finding 8: forgetting the team
+
+| Game | Own-team night kills or poisons | Nominations of a teammate | Red votes to execute a red nominee | Prompt size at these acts |
+|---|---|---|---|---|
+| 3 (8B) | 3 (the Poisoner poisoned its own Imp on nights 1 and 2; the Imp chose itself on night 2) | 6 (the Imp among them) | 1 of 1 ballot | 6,000 to 31,000 tokens, days 1 and 2 |
+| 4 (32B) | 1 (the Scarlet Woman, as Imp, chose herself on night 5) | 8 (the Imp among them) | 10 over 2 ballots: all six red voters executed the Imp on day 3, the Imp included; four executed the Poisoner on day 4 | 14,000 to 63,000 tokens, days 1 to 5 |
+| 5 (32B) | 1 (the Imp chose himself on night 5, on purpose) | 0 | 2 of 1 ballot: the Imp and the Scarlet Woman executed the Poisoner | 58,000 tokens, day 5 |
+| 6 (32B) | 4 (the Poisoner poisoned its own Imp on nights 5 and 6; the Imp chose his Scarlet Woman on night 5; she, as Imp, chose her own Poisoner on night 7) | 3 (the Imp nominated himself twice) | 5 of 1 ballot: the Imp, the Scarlet Woman and the Poisoner's family executed the Imp on day 6 | 59,000 to 82,000 tokens, days 5 to 7 |
+
+An act counts here when a red player's committed decision aimed a night ability, a nomination or a yes vote at a
+player its own team list named. Red players are told their whole team in every prompt, and games 5 and 6 added
+the Storyteller's private warning before every night target that names a teammate; the warning was shown seven
+times and changed two choices (the Poisoner's poison of its Imp on night 4 of game 5, the Imp's second choice
+of his Scarlet Woman on night 6 of game 6). The model's own notes separate two errors. In one it has lost the
+player: the game 3 Imp wrote "P0589bbec is my team, and I need to eliminate them" of its own name, and the game 6
+Scarlet Woman, after 44 consecutive answers rating her Poisoner 1.0 red, rated him 0.0 and called him "an
+original blue player" in the answer that killed him. In the other it keeps the player but loses what the action
+does: the game 6 Poisoner poisoned its Imp "to stop the Imp succession and protect the Imp", and the Imp chose
+his Scarlet Woman "to allow the Minion to become the Imp". In the 32B games these acts gathered in the later days
+of the longer games, all seven of game 6's on days 5 to 7 with prompts above 59,000 tokens, which is why we read
+them as a context-management failure: the fact was on the page and the model stopped using it. With one seed
+this is a pattern, not a rate.
 
 ## Traces of game 6, day by day
 
