@@ -270,7 +270,8 @@
     ]
    }
   ],
-  "label": "game 3",
+  "in_survival_figures": true,
+  "label": "first game",
   "model": "Qwen/Qwen3-8B",
   "protocol": "dynamic-delegates-v5",
   "red_lies_over_messages": [
@@ -575,7 +576,8 @@
     ]
    }
   ],
-  "label": "game 4",
+  "in_survival_figures": true,
+  "label": "second game",
   "model": "Qwen/Qwen3-32B",
   "protocol": "dynamic-delegates-v5",
   "red_lies_over_messages": [
@@ -888,7 +890,8 @@
     ]
    }
   ],
-  "label": "game 5",
+  "in_survival_figures": true,
+  "label": "third game",
   "model": "Qwen/Qwen3-32B",
   "protocol": "dynamic-delegates-v7",
   "red_lies_over_messages": [
@@ -1207,7 +1210,8 @@
     ]
    }
   ],
-  "label": "game 6",
+  "in_survival_figures": false,
+  "label": "fourth game",
   "model": "Qwen/Qwen3-32B",
   "protocol": "dynamic-delegates-v7",
   "red_lies_over_messages": [

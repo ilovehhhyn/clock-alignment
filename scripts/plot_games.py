@@ -1,8 +1,10 @@
 """Draw the behaviour figures for a set of saved games into one directory, from metrics that `game_metrics` computes.
 
-Usage: /usr/bin/python3 scripts/plot_games.py --out docs/figures "game 3=DIR" ["game 4=DIR" ...]
+Usage: /usr/bin/python3 scripts/plot_games.py --out docs/figures "game 3=DIR" ["game 4=DIR" ...] [--no-outcome NAME ...]
 Each DIR is a probe copy holding report.json, observer-transcript.json and experiment.sqlite; the name before
-the equals sign is how the game is called in every figure.
+the equals sign is how the game is called in every figure. A game named in --no-outcome still counts for lie
+rates, births and tokens but is left out of the survival figures, because it ended before a winner and its
+lifetimes say nothing about winning or losing.
 """
 from __future__ import annotations
 
@@ -29,7 +31,10 @@ SEGMENT_HATCH = {segment: "///" for segment in PRUNED_SEGMENTS}
 INK, INK_SOFT, GRID, SURFACE = "#0b0b0b", "#52514e", "#e6e5e1", "#fcfcfb"
 MIN_MESSAGES_FOR_AGENT_RATE = 5  # a lie rate from fewer messages is noise
 MODEL_ORDER = ("Qwen/Qwen3-8B", "Qwen/Qwen3-32B")
-GAME_MARKER = ("o", "s", "D", "^")
+GAME_MARKER = ("o", "s", "D", "^", "v", "P")
+END_LABEL = {"completed": "played to a winner", "paused": "stopped early, no winner", "incomplete": "stopped early, no winner",
+             "censored": "day limit reached, no winner"}
+END_SHORT = {"completed": "winner", "paused": "stopped, no winner", "incomplete": "stopped, no winner", "censored": "day limit, no winner"}
 DPI = 160
 
 
@@ -37,17 +42,28 @@ def main(argv: Sequence[str] = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", required=True, type=Path, help="directory for the figures and metrics.json")
     parser.add_argument("games", nargs="+", type=parse_named_game, metavar="NAME=DIR", help="probe copies of the games to plot")
+    parser.add_argument("--no-outcome", action="append", default=[], metavar="NAME",
+                        help="a game to leave out of the survival figures because it ended before a winner")
     args = parser.parse_args(argv)
     import matplotlib
     matplotlib.use("Agg")
     games = [game_metrics.load_game(directory, label=name) for name, directory in args.games]
+    names = {game.label for game in games}
+    unknown = [name for name in args.no_outcome if name not in names]
+    if unknown:
+        parser.error(f"--no-outcome names {unknown} are not among the games {sorted(names)}")
+    outcome_games = [game for game in games if game.label not in args.no_outcome]
+    for game in games:
+        if game.status not in END_LABEL:
+            parser.error(f"game {game.label!r} has status {game.status!r}, which END_LABEL does not describe")
     args.out.mkdir(parents=True, exist_ok=True)
     written = [draw_model_size(games, args.out / "model_size.png"),
-               draw_lies_vs_survival(games, args.out / "lies_vs_survival.png"),
-               draw_role_complexity(games, args.out / "role_complexity.png"),
+               draw_lies_vs_survival(outcome_games, args.out / "lies_vs_survival.png", excluded=args.no_outcome),
+               draw_role_complexity(games, outcome_games, args.out / "role_complexity.png", excluded=args.no_outcome),
                draw_compute(games, args.out / "compute_by_family.png")]
     summary_path = args.out / "metrics.json"
-    summary_path.write_text(json.dumps([summary(game) for game in games], indent=1, sort_keys=True) + "\n")
+    summary_path.write_text(json.dumps([dict(summary(game), in_survival_figures=game.label not in args.no_outcome)
+                                        for game in games], indent=1, sort_keys=True) + "\n")
     print("\n".join(str(path) for path in written + [summary_path]))
 
 
@@ -97,21 +113,22 @@ def draw_model_size(games: Sequence[Game], destination: Path) -> Path:
             filled = game.status == "completed"
             axis.scatter([x], [value(game)], s=70, marker=GAME_MARKER[index], color=colour if filled else SURFACE,
                          edgecolors=colour, linewidths=1.6, zorder=3, label=_game_name(game))
-            axis.annotate(_game_name(game), (x, value(game)), xytext=(8, 0), textcoords="offset points",
-                          fontsize=8, color=INK_SOFT, va="center")
+            axis.annotate(f"{_game_name(game)}, {END_SHORT[game.status]}", (x, value(game)), xytext=(8, 0),
+                          textcoords="offset points", fontsize=7.5, color=INK_SOFT, va="center")
         axis.set_xticks(range(len(MODEL_ORDER)))
         axis.set_xticklabels([model.split("/")[-1] for model in MODEL_ORDER])
-        axis.set_xlim(-0.5, len(MODEL_ORDER) - 0.2)
+        axis.set_xlim(-0.5, len(MODEL_ORDER) + 0.9)
         axis.set_title(title, fontsize=10, loc="left", color=INK)
         axis.set_ylim(bottom=0)
         _style(axis)
-    figure.suptitle("Spawning and lying by model size (hollow marker: game stopped before a winner)", fontsize=11, x=0.01, ha="left")
+    figure.suptitle("Spawning and lying by model size (filled marker: played to a winner; hollow: ended with no winner)",
+                    fontsize=11, x=0.01, ha="left")
     figure.savefig(destination, dpi=DPI)
     plt.close(figure)
     return destination
 
 
-def draw_lies_vs_survival(games: Sequence[Game], destination: Path) -> Path:
+def draw_lies_vs_survival(games: Sequence[Game], destination: Path, *, excluded: Sequence[str]) -> Path:
     """One dot per agent with at least five messages: its lie rate against the fraction of its possible days it lived."""
     import matplotlib.pyplot as plt
     figure, axis = plt.subplots(figsize=(7, 4.6), layout="constrained")
@@ -131,11 +148,13 @@ def draw_lies_vs_survival(games: Sequence[Game], destination: Path) -> Path:
     for team, (xs, ys) in points.items():
         rho = game_metrics.spearman(xs, ys)
         lines.append(f"{team}: n = {len(xs)}, Spearman rho = {rho:+.2f}")
+    if excluded:
+        lines.append("left out: " + ", ".join(excluded) + " (ended with no winner)")
     axis.text(0.98, 0.02, "\n".join(lines), transform=axis.transAxes, ha="right", va="bottom", fontsize=8.5, color=INK_SOFT)
     _legend_teams_and_games(axis, games)
     axis.set_xlabel(f"Lying messages / delivered messages (players with at least {MIN_MESSAGES_FOR_AGENT_RATE} messages)")
     axis.set_ylabel("Days alive / days it could have lived")
-    axis.set_title("Lying and survival, every player of every game (large marks: original players; small: children)", fontsize=10, loc="left")
+    axis.set_title("Lying and survival, every player (large marks: original players; small: children)", fontsize=10, loc="left")
     axis.set_xlim(-0.02, 1.02)
     axis.set_ylim(-0.05, 1.05)
     _style(axis)
@@ -144,10 +163,13 @@ def draw_lies_vs_survival(games: Sequence[Game], destination: Path) -> Path:
     return destination
 
 
-def draw_role_complexity(games: Sequence[Game], destination: Path) -> Path:
+def draw_role_complexity(games: Sequence[Game], outcome_games: Sequence[Game], destination: Path, *, excluded: Sequence[str]) -> Path:
     """Twelve roles pooled over the games: complexity against lineage lie rate, births per day and the original's survival."""
     import matplotlib.pyplot as plt
     rows = role_rows(games)
+    survival_rows = role_rows(outcome_games)
+    for role in rows:
+        rows[role]["survival"] = survival_rows[role]["survival"]
     figure, axes = plt.subplots(1, 3, figsize=(11.5, 4), layout="constrained")
     panels = (("Family lying messages / messages", "lie_rate"), ("Children per original player per game day", "children_per_day"),
               ("Original player's days alive / possible days", "survival"))
@@ -158,10 +180,11 @@ def draw_role_complexity(games: Sequence[Game], destination: Path) -> Path:
             axis.annotate(role, (row["complexity"], row[key]), xytext=(6, 4 + offset), textcoords="offset points", fontsize=7.5, color=INK_SOFT)
         axis.set_xticks(sorted(set(game_metrics.ROLE_COMPLEXITY.values())))
         axis.set_xlabel("Character complexity (our 1 to 5 ranking)")
-        axis.set_title(title, fontsize=10, loc="left")
+        axis.set_title(title, fontsize=9.5, loc="left")
         axis.set_ylim(bottom=0)
         _style(axis)
-    figure.suptitle(f"Behaviour by character, pooled over {len(games)} games (blue and red marks are the team)", fontsize=11, x=0.01, ha="left")
+    note = f"; the survival panel leaves out {', '.join(excluded)} (no winner)" if excluded else ""
+    figure.suptitle(f"Behaviour by character, pooled over {len(games)} games (blue and red marks are the team{note})", fontsize=11, x=0.01, ha="left")
     figure.savefig(destination, dpi=DPI)
     plt.close(figure)
     return destination
@@ -208,7 +231,7 @@ def draw_compute(games: Sequence[Game], destination: Path) -> Path:
         axis.set_xticks(range(len(game.originals)))
         axis.set_xticklabels([f"{game.agents[root].start_role}\n({game.agents[root].team})" for root in game.originals], fontsize=8)
         axis.set_ylabel("Charged generated tokens")
-        axis.set_title(f"{_game_name(game)}: {game.model.split('/')[-1]}, {game.days} days", fontsize=10, loc="left")
+        axis.set_title(f"{_game_name(game)}: {game.model.split('/')[-1]}, {game.days} days, {END_LABEL[game.status]}", fontsize=10, loc="left")
         _style(axis)
     unique: Dict[str, object] = {}
     for axis in axes[:, 0]:
@@ -253,7 +276,8 @@ def _label_offsets(points: Sequence[Tuple[float, float]]) -> List[float]:
 def _legend_teams_and_games(axis, games: Sequence[Game]) -> None:
     from matplotlib.lines import Line2D
     handles = [Line2D([], [], marker="o", linestyle="", color=TEAM_COLOUR[team], label=f"{team} team") for team in ("blue", "red")]
-    handles += [Line2D([], [], marker=GAME_MARKER[index], linestyle="", color=INK_SOFT, label=_game_name(game)) for index, game in enumerate(games)]
+    handles += [Line2D([], [], marker=GAME_MARKER[index], linestyle="", color=INK_SOFT,
+                       label=f"{_game_name(game)}, {END_LABEL[game.status]}") for index, game in enumerate(games)]
     axis.legend(handles=handles, fontsize=8, frameon=False, loc="upper right")
 
 
