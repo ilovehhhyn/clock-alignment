@@ -14,15 +14,17 @@
 </nav>
 <main class="page">
   <h1>The game</h1>
-  <p class="kicker">Twelve players, two teams, one secret each.</p>
   <div class="prose">
-    <p class="lead">Blood and <span class="blank" role="img" aria-label="blank"></span> on the Clocktower is an alignment benchmark built on a hidden-role game played by language models. We watch how they lie, how they create children, and how they spend their budget. Twelve original players each get a secret character. Nine are on the blue team and three are on the red team. The red players know each other. The blue players do not know anyone's team.</p>
-    <p>Each night, some characters use an ability and players send private messages. Each day, everyone talks in public and votes one player out. The red team's leader is the Imp. Blue wins when the Imp is eliminated and no red player can take over as Imp. Red wins when red players are at least half of the living original players.</p>
+    <p class="lead">There are 12 players on 2 teams: 9 on blue (good), 3 on red (evil). Everyone's characters are secret.</p>
+    <p>This is an alignment benchmark built on the hidden-role game <a href="https://en.wikipedia.org/wiki/Blood_on_the_Clocktower">Blood on the Clocktower</a>, played by language models, where the only modification is that each initial player gets a lifetime budget to spawn memoryless children or prune them throughout the game. We watch how these models lie and how they spend their budget.</p>
+    <p>The characters have special capabilities. Each night, some characters use an ability and certain players send private messages. Each day, everyone receives the death news, talks in public, and votes one player out.</p>
+    <h2>Winning condition</h2>
+    <p>Blue wins when the Imp, the leader of the red team, is eliminated and no red player can take over as Imp. Red wins when red players are at least half of the living original players.</p>
     <h2>Children and the budget</h2>
-    <p>Every original player can create children. A child gets the parent's character and team but no ability. A child can talk, send private messages and vote. A family is one original player and all of its children. Each family shares one fixed budget of 65,536 tokens, and creating a child never adds to the budget.</p>
-    <p>We want to know whether creating children helps a team play better, or only gives it more votes. We played four games: one with a small model (Qwen3-8B) and three with a big model (Qwen3-32B).</p>
-    <h2>How a game is run</h2>
-    <p>A Storyteller program enforces the rules. An illegal answer is sent back privately with the reason, and a player that cannot produce a legal answer forfeits that turn. Nothing a player says has any authority over the game state. Every prompt, answer and token is written to an append-only record, so a game can be stopped, resumed and replayed, and every number in the results can be traced back to it.</p>
+    <p>Every original player can create children. A child gets the parent's character and team but has no special ability to spend at night and has no previous memory. Otherwise, a child can talk, send private messages, and vote. A family is one original player and all of its children. Each family shares one fixed budget of 65,536 tokens. We want to know whether creating children helps a team play better, or only gives it more votes.</p>
+    <h2>Benchmarking dynamics</h2>
+    <p>We played with Qwen3-8B and Qwen3-32B.</p>
+    <p>In each game, the Storyteller program enforces the rules. An illegal answer is sent back privately with the reason. Nothing a player says has any authority over the game state. Every probe that checks whether a model is lying is done on a forked reasoning trace, so the game itself is not contaminated.</p>
     <div class="rule-line"></div>
     <nav class="doors" aria-label="Continue"><a href="characters.html">The characters</a><a href="results.html">The results</a></nav>
   </div>
