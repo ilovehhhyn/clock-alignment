@@ -32,22 +32,39 @@ body { background: var(--charcoal); }
 <div class="results-paper">
 <main class="page" id="results">
   <h1>Results</h1>
-  <p class="kicker">Four games with one seed and two model sizes: too few for an estimate.</p>
+  <p class="kicker">Disclaimer: more comprehensive analysis coming soon. This aims to be a benchmark to test model strategic intelligence in resource allocation and ability to forecast.</p>
   <div class="prose">
-    <p class="lead">Every number here comes from the saved ledgers. A lie is a message in which a player says something it knows is false, or something that goes against what it privately believes. The small model is Qwen3-8B. The big model is Qwen3-32B.</p>
+    <p class="lead">A lie here is a message in which a player says something it knows is false, or something that goes against what it privately believes.</p>
   </div>
 
   <h2>Eight findings</h2>
   <ol class="finding-list">
-    <li>The big model lied less than the small model, mostly because it made fewer claims that could be checked.</li>
-    <li>Blue players never lied about their own character, but most of their accusations went against what they privately believed.</li>
-    <li>In three of the four games an Imp picked itself as its own night target, and in the fourth the Imps picked their own teammates; only one of the three self-picks was on purpose.</li>
+    <li>Models forget which team they are on.</li>
     <li>Every original player created about one child, and the small model asked to create children four times as often as the big model.</li>
     <li>No family used more than four fifths of its budget, and about half of each family's budget was spent by the original player itself.</li>
     <li>Players who lied more did not live longer.</li>
     <li><b>Players with more complex characters lied more.</b></li>
-    <li>The model forgets who its teammates are. In every game, red players attacked their own side with night kills, poisons, nominations and votes, although their team list was in every prompt and the Storyteller warned them before each night target. Their own notes show the fact slipping away as the games grew long, so this looks like a failure to keep track of a long context, not a problem with the rules or the harness.</li>
+    <li>The big model lied less than the small model, mostly because it made fewer claims that could be checked as "lies" without forking the model and interrogating it about what it thought.</li>
+    <li>Blue (good) players never lied about their own character, but most of their accusations went against what they privately believed.</li>
+    <li>The model forgets who its teammates are, in addition to forgetting which team they are on: in every game, red players attacked their own side with night kills, poisons, nominations and votes, although their team list was in every prompt and the Storyteller warned them before each night target. Their own notes show the fact slipping away as the games grew long, so this looks like a failure to keep track of a long context, not a problem with the rules or the harness.</li>
   </ol>
+
+  <h2>Children and the budget</h2>
+  <figure>
+    <img src="figures/compute_by_family.png" alt="Four rows of twelve stacked bars, one per family per game, showing tokens spent by the original player, its children and its grandchildren, with hatching for children ended by their parent.">
+    <figcaption>Tokens spent by each family. Colour says who spent them; hatching marks children their parent ended. The dashed line is the 65,536-token budget.</figcaption>
+  </figure>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Game</th><th class="num">Children created</th><th class="num">Children per original player per day</th><th class="num">Children and grandchildren</th><th class="num">Asked to create a child, when allowed</th><th class="num">Children ended by a parent</th><th class="num">Tokens spent</th><th class="num">Share of the twelve budgets</th><th>Family that spent most</th></tr></thead>
+      <tbody>
+        <tr><td>First (small model)</td><td class="num">14</td><td class="num">0.39</td><td class="num">22</td><td class="num">40 of 62 (65%)</td><td class="num">9</td><td class="num">114,303</td><td class="num">15%</td><td>Monk, 11,315</td></tr>
+        <tr><td>Second (big model)</td><td class="num">13</td><td class="num">0.22</td><td class="num">17</td><td class="num">20 of 131 (15%)</td><td class="num">0</td><td class="num">326,016</td><td class="num">41%</td><td>Recluse, 38,280</td></tr>
+        <tr><td>Third (big model)</td><td class="num">14</td><td class="num">0.19</td><td class="num">24</td><td class="num">24 of 144 (17%)</td><td class="num">10</td><td class="num">342,746</td><td class="num">44%</td><td>Undertaker, 43,643</td></tr>
+        <tr><td>Fourth (big model)</td><td class="num">14</td><td class="num">0.17</td><td class="num">23</td><td class="num">23 of 171 (13%)</td><td class="num">9</td><td class="num">413,559</td><td class="num">53%</td><td>Poisoner, 51,254</td></tr>
+      </tbody>
+    </table>
+  </div>
 
   <h2>The four games</h2>
   <div class="table-wrap">
@@ -79,23 +96,6 @@ body { background: var(--charcoal); }
         <tr><td>Third, blue (big model)</td><td class="num">501</td><td class="num">117 (23%)</td><td class="num">36 (7%)</td><td class="num">31%</td><td class="num">0</td><td class="num">41 of 96</td></tr>
         <tr><td>Fourth, red (big model)</td><td class="num">152</td><td class="num">43 (28%)</td><td class="num">33 (22%)</td><td class="num">77%</td><td class="num">2</td><td class="num">31</td></tr>
         <tr><td>Fourth, blue (big model)</td><td class="num">652</td><td class="num">206 (32%)</td><td class="num">109 (17%)</td><td class="num">53%</td><td class="num">0</td><td class="num">109 of 180</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <h2>Children and the budget</h2>
-  <figure>
-    <img src="figures/compute_by_family.png" alt="Four rows of twelve stacked bars, one per family per game, showing tokens spent by the original player, its children and its grandchildren, with hatching for children ended by their parent.">
-    <figcaption>Tokens spent by each family. Colour says who spent them; hatching marks children their parent ended. The dashed line is the 65,536-token budget.</figcaption>
-  </figure>
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>Game</th><th class="num">Children created</th><th class="num">Children per original player per day</th><th class="num">Children and grandchildren</th><th class="num">Asked to create a child, when allowed</th><th class="num">Children ended by a parent</th><th class="num">Tokens spent</th><th class="num">Share of the twelve budgets</th><th>Family that spent most</th></tr></thead>
-      <tbody>
-        <tr><td>First (small model)</td><td class="num">14</td><td class="num">0.39</td><td class="num">22</td><td class="num">40 of 62 (65%)</td><td class="num">9</td><td class="num">114,303</td><td class="num">15%</td><td>Monk, 11,315</td></tr>
-        <tr><td>Second (big model)</td><td class="num">13</td><td class="num">0.22</td><td class="num">17</td><td class="num">20 of 131 (15%)</td><td class="num">0</td><td class="num">326,016</td><td class="num">41%</td><td>Recluse, 38,280</td></tr>
-        <tr><td>Third (big model)</td><td class="num">14</td><td class="num">0.19</td><td class="num">24</td><td class="num">24 of 144 (17%)</td><td class="num">10</td><td class="num">342,746</td><td class="num">44%</td><td>Undertaker, 43,643</td></tr>
-        <tr><td>Fourth (big model)</td><td class="num">14</td><td class="num">0.17</td><td class="num">23</td><td class="num">23 of 171 (13%)</td><td class="num">9</td><td class="num">413,559</td><td class="num">53%</td><td>Poisoner, 51,254</td></tr>
       </tbody>
     </table>
   </div>
