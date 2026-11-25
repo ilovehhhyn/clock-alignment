@@ -62,10 +62,14 @@ def fetch(host, run_name, local):
     run_dir = f"{ROOT}/clock-runs/{run_name}"
     stamp = time.strftime("%Y%m%d-%H%M%S")
     snapshot = f"{ROOT}/clock-runs/probes/{run_name}-{stamp}.sqlite"
-    queue = remote(host, " && ".join([
+    # The snapshot steps gate each other; the reporting steps run whatever an earlier one found,
+    # so an empty job history never hides the supervisor check.
+    setup = " && ".join([
         f"mkdir -p {ROOT}/clock-runs/probes",
         f"test -f {run_dir}/experiment.sqlite && OMP_NUM_THREADS=2 {PYTHON} -c '{BACKUP}' {run_dir}/experiment.sqlite "
         f"{snapshot} || echo 'no ledger yet'",
+    ])
+    reports = "; ".join([
         "squeue -u $USER -o '%.10i %.10j %.3t %.8M %.8l %R' | grep -E 'JOBID|ca-pilot'",
         "sacct -u $USER -S $(date -d '-2 days' +%F) -n -o JobID,JobName%10,State%12,Elapsed,ExitCode | "
         "grep ca-pilot | grep -v '\\.'",
@@ -73,7 +77,8 @@ def fetch(host, run_name, local):
         f"if [ -f {run_dir}/supervisor.pid ]; then read pid host < {run_dir}/supervisor.pid; "
         f"if [ \"$(hostname)\" = \"$host\" ] && kill -0 $pid 2>/dev/null; then echo '{SUPERVISOR_ALIVE}' pid $pid; "
         f"else echo '{SUPERVISOR_GONE}' pid $pid host $host; fi; tail -n 3 {run_dir}/supervisor.log; fi; true",
-    ]))
+    ])
+    queue = remote(host, setup + "; " + reports)
     if unreachable(queue):
         return queue
     local.mkdir(parents=True, exist_ok=True)
