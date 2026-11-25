@@ -7,9 +7,9 @@ import unittest
 from unittest import mock
 
 from clock_alignment.allowance import decide_allowance
-from clock_alignment.anthropic_provider import (API_KEY_ENV, CACHE_CONTROL, CHUNK_CHARS, REFUSAL_FAULT,
-                                                UNSUPPORTED_SCHEMA_KEYS, AnthropicProvider, claude_schema,
-                                                joined_text, observation_blocks, stable_prefix_length)
+from clock_alignment.anthropic_provider import (API_KEY_ENV, CACHE_CONTROL, REFUSAL_FAULT, UNSUPPORTED_SCHEMA_KEYS,
+                                                AnthropicProvider, claude_action_payload, claude_schema, joined_text,
+                                                observation_blocks, reusable_prefix_length)
 from clock_alignment.config import NANODOLLARS, Config
 from clock_alignment.engine import Engine
 from clock_alignment.prompts import CLAUDE_REWORDING, CLAUDE_SYSTEM, SYSTEM
@@ -90,7 +90,7 @@ class ClaudeProviderTests(unittest.TestCase):
         balance = self.store.daily_balance(self.family, self.view["day"])
         shared = action_payload(Config(), self.request, self.view, allowance, balance)["input"]
         self.assertEqual(joined_text(payload), shared)
-        self.assertEqual(payload["system"], [{"type": "text", "text": CLAUDE_SYSTEM, "cache_control": CACHE_CONTROL}])
+        self.assertEqual(payload["system"], [{"type": "text", "text": CLAUDE_SYSTEM}])
         self.assertEqual(payload["thinking"], {"type": "adaptive", "display": "summarized"})
         self.assertEqual(payload["output_config"]["effort"], "xhigh")
         self.assertEqual(payload["max_tokens"], allowance.output_cap)
@@ -263,45 +263,32 @@ class ClaudeProviderTests(unittest.TestCase):
         modes = [row[0] for row in self.store.db.execute("SELECT mode FROM decisions")]
         self.assertEqual(len(modes), 3)
 
+    def test_a_reprompt_of_the_same_request_repeats_the_cached_block_byte_for_byte(self):
+        allowance = self.allowance()
+        balance = self.store.daily_balance(self.family, self.view["day"])
+        retry = {**self.request, "attempt": 2, "storyteller_notice": "Storyteller check: are you sure?"}
 
-class CacheSplitTests(unittest.TestCase):
-    def view(self, events):
-        return {"day": 3, "events": events, "identity": {"team": "red"}, "rules": {"text": "x" * 50}}
+        first = claude_action_payload(self.config, self.request, self.view, allowance, balance)
+        second = claude_action_payload(self.config, retry, self.view, allowance, balance)
 
-    def text(self, view):
+        first_blocks, second_blocks = first["messages"][0]["content"], second["messages"][0]["content"]
+        self.assertEqual(first_blocks[0], second_blocks[0])
+        self.assertEqual(first_blocks[0]["cache_control"], CACHE_CONTROL)
+        self.assertNotEqual(first_blocks[1], second_blocks[1])
+        self.assertTrue(second_blocks[1]["text"].startswith(',"turn":'))
+
+    def test_the_split_finds_the_top_level_turn_even_when_a_message_quotes_it(self):
         from clock_alignment.config import canonical
-        return canonical({"authorized_observation": view, "turn": {"id": "t"}})
+        text = canonical({"authorized_observation": {"events": [{"text": 'he wrote ,"turn": here'}]}, "turn": {"id": "t"}})
 
-    def test_blocks_inside_the_stable_prefix_repeat_byte_for_byte_in_the_next_call_that_day(self):
-        first_events = [{"kind": "say", "text": "a" * 900, "seq": index} for index in range(12)]
-        first_view = self.view(first_events)
-        second_view = self.view(first_events + [{"kind": "say", "text": "b" * 50, "seq": 12}])
-        first, second = self.text(first_view), self.text(second_view)
+        cut = reusable_prefix_length(text)
 
-        first_blocks = observation_blocks(first, stable_prefix_length(first, first_view))
-        second_blocks = observation_blocks(second, stable_prefix_length(second, second_view))
+        self.assertEqual(text[cut:], ',"turn":{"id":"t"}}')
+        self.assertEqual("".join(block["text"] for block in observation_blocks(text)), text)
 
-        marked = [index for index, block in enumerate(first_blocks) if "cache_control" in block]
-        self.assertEqual(len(marked), 1)
-        cached = first_blocks[:marked[0] + 1]
-        self.assertEqual([block["text"] for block in cached], [block["text"] for block in second_blocks[:len(cached)]])
-        self.assertEqual("".join(block["text"] for block in first_blocks), first)
-        self.assertLessEqual(len(second_blocks) - len(cached), 20)
-
-    def test_a_short_prefix_gets_no_chunk_breakpoint(self):
-        view = self.view([])
-        text = self.text(view)
-
-        blocks = observation_blocks(text, stable_prefix_length(text, view))
-
-        self.assertLess(stable_prefix_length(text, view), CHUNK_CHARS)
-        self.assertEqual(blocks, [{"type": "text", "text": text}])
-
-    def test_text_that_does_not_open_with_day_and_events_is_rejected(self):
-        view = self.view([{"kind": "say", "seq": 0}])
-
+    def test_text_that_does_not_end_with_its_turn_is_rejected(self):
         with self.assertRaises(ValueError):
-            stable_prefix_length('{"other":1}', view)
+            reusable_prefix_length('{"authorized_observation":{},"zeta":1}')
 
 
 class ClaudeRewordingTests(unittest.TestCase):
