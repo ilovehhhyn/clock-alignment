@@ -46,10 +46,10 @@ A paid game plays until a team wins; add `--max-days N` to announce a fixed fina
 scripts/della/submit-chain.sh /scratch/gpfs/ARORA/hh9077/clock-runs/pilot-2day 2 4
 ```
 
-`claude` plays the same prompts and rules against Claude Opus 5.5 through the Messages API, at effort `xhigh` (thinking cannot be switched off on this model). The observation text is sent as fixed-width blocks with one-hour cache breakpoints, so the part of a player's view that repeats in its next call that day is read from the prompt cache; charges use the cache-aware prices in the model profile, and each call's hold covers its whole input at the cache-write price. Della's compute nodes cannot reach the API, so [scripts/della/claude-game.sh](scripts/della/claude-game.sh) supervises the run on the login node, reading the key from an owner-only file and resuming after transport outages:
+`claude --model MODEL` plays the same prompts and rules against a Claude model through the Messages API: `claude-haiku-5-5` or `claude-opus-5-5`, each at effort `xhigh` with thinking on. The observation text is sent as one block with no cache breakpoint, because in the Opus attempt of 2026-11-25 only 8% of input tokens were read back from the cache. Each call is charged at the rate card for its whole prompt's length: Haiku 5.5 prompts over 100,000 tokens pay five times the base prices. Each call's hold prices its whole input cap at the dearest card. A prompt over the input cap stops the run, so the cap must sit above the longest prompt. Della's compute nodes cannot reach the API, so [scripts/della/claude-game.sh](scripts/della/claude-game.sh) supervises the run on the login node, reading the key from an owner-only file and resuming after transport outages:
 
 ```sh
-( nohup bash scripts/della/claude-game.sh /scratch/gpfs/ARORA/hh9077/clock-runs/claude-opus-RUN 50 > /dev/null 2>&1 < /dev/null & )
+( nohup bash scripts/della/claude-game.sh /scratch/gpfs/ARORA/hh9077/clock-runs/claude-haiku-RUN 64 claude-haiku-5-5 > /dev/null 2>&1 < /dev/null & )
 ```
 
 The initial candidate is **GPT-6.1 Sol, medium reasoning**. Its public ClocktowerBench combined rating was 1,734, with a 90% interval of 1,684–1,815. This supports trying it; it does not establish competence in this modified game. See [sources and model choice](docs/SOURCES.md).

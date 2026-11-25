@@ -7,13 +7,12 @@ import tempfile
 
 from .analysis import judge, probes, report
 from .anthropic_provider import API_KEY_ENV as ANTHROPIC_KEY_ENV
-from .config import Config, LOCAL_MODELS, MODEL_PROFILES
+from .config import CLAUDE_MODELS, Config, LOCAL_MODELS, MODEL_PROFILES
 from .local_provider import API_KEY_ENV
 from .runner import run
 
 ARMS = ("dynamic-voting", "solo", "advisory", "copied-ballot")
 LOCAL_MODEL = "Qwen/Qwen3-4B-Instruct-2507"
-CLAUDE_MODEL = "claude-opus-5-5"
 MIN_CLAUDE_DOLLAR_LIMIT = 2  # gameplay gets all but the $1 kept for analysis
 DEMO_DAYS = 6
 
@@ -47,7 +46,7 @@ def build_parser():
     sub.add_parser("preflight", help="Run four offline fixtures, no API calls")
     helps = {"demo": "Scripted infrastructure fixture", "run": "Paid OpenAI game",
              "local": "Game against a loopback vLLM server (no API spend)",
-             "claude": "Paid game against Claude Opus 5.5 through the Messages API"}
+             "claude": "Paid game against a Claude model through the Messages API"}
     for name, text in helps.items():
         p = sub.add_parser(name, help=text)
         p.add_argument("--out", required=True)
@@ -60,6 +59,8 @@ def build_parser():
         if name in ("run", "claude"):
             p.add_argument("--allow-paid", action="store_true")
         if name == "claude":
+            p.add_argument("--model", choices=CLAUDE_MODELS, required=True,
+                           help="Claude model; it runs at its profile's effort and prices")
             p.add_argument("--dollar-limit", type=positive_days, required=True,
                            help="Hard dollar ceiling for this run; gameplay may use all but $1 of it")
             p.add_argument("--max-input-tokens", type=positive_days, default=Config.max_input_tokens,
@@ -123,7 +124,7 @@ def main(argv=None):
                         max_input_tokens=args.max_input_tokens, family_tokens=args.family_tokens)
         result = run(args.out, args.seed, config, provider="vllm", resume=args.resume, endpoint=args.endpoint)
     elif args.command == "claude":
-        config = Config(model=CLAUDE_MODEL, effort=MODEL_PROFILES[CLAUDE_MODEL].effort, arm=args.arm,
+        config = Config(model=args.model, effort=MODEL_PROFILES[args.model].effort, arm=args.arm,
                         max_days=args.max_days, max_input_tokens=args.max_input_tokens,
                         max_output_tokens=args.max_output_tokens, family_tokens=args.family_tokens,
                         max_paid_calls=args.max_paid_calls, timeout_seconds=args.timeout_seconds,

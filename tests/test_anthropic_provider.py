@@ -1,4 +1,4 @@
-"""The Claude path sends the shared prompt text in cacheable blocks, charges cache-aware prices and keeps every limit."""
+"""The Claude path sends the shared prompt text in one block, charges each prompt at its rate card and keeps every limit."""
 from copy import deepcopy
 import json
 import os
@@ -7,10 +7,10 @@ import unittest
 from unittest import mock
 
 from clock_alignment.allowance import decide_allowance
-from clock_alignment.anthropic_provider import (API_KEY_ENV, CACHE_CONTROL, REFUSAL_FAULT, UNSUPPORTED_SCHEMA_KEYS,
-                                                AnthropicProvider, claude_action_payload, claude_schema, joined_text,
-                                                observation_blocks, reusable_prefix_length)
-from clock_alignment.config import NANODOLLARS, Config
+from clock_alignment.anthropic_provider import (API_KEY_ENV, REFUSAL_FAULT, UNSUPPORTED_SCHEMA_KEYS, AnthropicProvider,
+                                                claude_schema)
+from clock_alignment.cli import build_parser
+from clock_alignment.config import NANODOLLARS, Config, ModelProfile, RateCard
 from clock_alignment.engine import Engine
 from clock_alignment.prompts import CLAUDE_REWORDING, CLAUDE_SYSTEM, SYSTEM
 from clock_alignment.provider import (AllowanceCutoff, CapHit, InvalidResponse, ProviderFailure, TransportFailure,
@@ -20,11 +20,13 @@ from clock_alignment.schema import empty_action, request_schema
 from clock_alignment.store import BudgetLimit, Store
 
 OPUS = "claude-opus-5-5"
+HAIKU = "claude-haiku-5-5"
 COUNTED = 2_000
+HAIKU_THRESHOLD = 100_000  # Haiku 5.5 prompts over this many tokens pay five times the base prices
 
 
-def reply(text, stop="end_turn", fresh=900, read=0, written=0, output=200, category=None):
-    raw = {"id": "msg_fixture", "type": "message", "role": "assistant", "model": OPUS,
+def reply(text, stop="end_turn", fresh=900, read=0, written=0, output=200, category=None, model=OPUS):
+    raw = {"id": "msg_fixture", "type": "message", "role": "assistant", "model": model,
            "content": [{"type": "thinking", "thinking": "a summary", "signature": "sig"}, {"type": "text", "text": text}],
            "stop_reason": stop, "usage": {"input_tokens": fresh, "cache_read_input_tokens": read,
                                           "cache_creation_input_tokens": written, "output_tokens": output}}
@@ -55,11 +57,14 @@ class FakeTransport:
         return deepcopy(answer)
 
 
-class ClaudeProviderTests(unittest.TestCase):
+class ClaudeFixture:
+    """One stored game at its first request; subclasses name the model and the input cap. Holds no tests."""
+    model, max_input_tokens = OPUS, Config.max_input_tokens
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.config = Config(model=OPUS, effort="xhigh")
+        self.config = Config(model=self.model, effort="xhigh", max_input_tokens=self.max_input_tokens)
         self.engine = Engine(self.config.to_dict(), seed=91)
         self.store = Store(self.temp.name)
         self.addCleanup(self.store.close)
@@ -74,14 +79,16 @@ class ClaudeProviderTests(unittest.TestCase):
         return decide_allowance(self.config, self.store.remaining(self.family),
                                 self.store.message_remaining(self.actor, self.request["session"]))
 
-    def act(self, answers, allowance=None, transport_try=1):
-        transport = FakeTransport(answers)
+    def act(self, answers, allowance=None, transport_try=1, counted=COUNTED):
+        transport = FakeTransport(answers, counted)
         provider = AnthropicProvider(self.store, transport=transport)
         result = provider.act(self.request, self.view, allowance or self.allowance(), self.family,
                               transport_try=transport_try)
         return result, transport
 
-    def test_the_request_joins_to_the_shared_text_and_runs_at_xhigh_with_summarized_thinking(self):
+
+class ClaudeProviderTests(ClaudeFixture, unittest.TestCase):
+    def test_the_request_sends_the_shared_text_as_one_uncached_block_at_xhigh_with_summarized_thinking(self):
         allowance = self.allowance()
 
         _, transport = self.act([reply(json.dumps(empty_action()))], allowance)
@@ -89,7 +96,7 @@ class ClaudeProviderTests(unittest.TestCase):
         (payload,) = transport.generations
         balance = self.store.daily_balance(self.family, self.view["day"])
         shared = action_payload(Config(), self.request, self.view, allowance, balance)["input"]
-        self.assertEqual(joined_text(payload), shared)
+        self.assertEqual(payload["messages"], [{"role": "user", "content": [{"type": "text", "text": shared}]}])
         self.assertEqual(payload["system"], [{"type": "text", "text": CLAUDE_SYSTEM}])
         self.assertEqual(payload["thinking"], {"type": "adaptive", "display": "summarized"})
         self.assertEqual(payload["output_config"]["effort"], "xhigh")
@@ -263,32 +270,31 @@ class ClaudeProviderTests(unittest.TestCase):
         modes = [row[0] for row in self.store.db.execute("SELECT mode FROM decisions")]
         self.assertEqual(len(modes), 3)
 
-    def test_a_reprompt_of_the_same_request_repeats_the_cached_block_byte_for_byte(self):
-        allowance = self.allowance()
-        balance = self.store.daily_balance(self.family, self.view["day"])
-        retry = {**self.request, "attempt": 2, "storyteller_notice": "Storyteller check: are you sure?"}
 
-        first = claude_action_payload(self.config, self.request, self.view, allowance, balance)
-        second = claude_action_payload(self.config, retry, self.view, allowance, balance)
+class HaikuRateCardTests(ClaudeFixture, unittest.TestCase):
+    """Haiku 5.5 bills each request at the card for its whole prompt's length, cache tokens included."""
+    model, max_input_tokens = HAIKU, 300_000
 
-        first_blocks, second_blocks = first["messages"][0]["content"], second["messages"][0]["content"]
-        self.assertEqual(first_blocks[0], second_blocks[0])
-        self.assertEqual(first_blocks[0]["cache_control"], CACHE_CONTROL)
-        self.assertNotEqual(first_blocks[1], second_blocks[1])
-        self.assertTrue(second_blocks[1]["text"].startswith(',"turn":'))
+    def charge(self, **usage):
+        # The receipt check requires the billed prompt to fit the exact count taken before sending.
+        self.act([reply(json.dumps(empty_action()), output=150, model=HAIKU, **usage)], counted=sum(usage.values()))
+        return self.store.call(f"game:{self.request['id']}")["charge_nano"]
 
-    def test_the_split_finds_the_top_level_turn_even_when_a_message_quotes_it(self):
-        from clock_alignment.config import canonical
-        text = canonical({"authorized_observation": {"events": [{"text": 'he wrote ,"turn": here'}]}, "turn": {"id": "t"}})
+    def test_a_prompt_of_exactly_the_threshold_pays_the_base_card(self):
+        self.assertEqual(self.charge(fresh=HAIKU_THRESHOLD), HAIKU_THRESHOLD * 100 + 150 * 500)
 
-        cut = reusable_prefix_length(text)
+    def test_one_token_over_the_threshold_puts_every_token_on_the_long_card(self):
+        self.assertEqual(self.charge(fresh=HAIKU_THRESHOLD + 1), (HAIKU_THRESHOLD + 1) * 500 + 150 * 2_500)
 
-        self.assertEqual(text[cut:], ',"turn":{"id":"t"}}')
-        self.assertEqual("".join(block["text"] for block in observation_blocks(text)), text)
+    def test_cache_reads_count_toward_the_threshold(self):
+        # Witness: 60,000 fresh tokens alone are short; with 40,001 cache reads the prompt is 100,001 tokens.
+        self.assertEqual(self.charge(fresh=60_000, read=40_001), 60_000 * 500 + 40_001 * 50 + 150 * 2_500)
 
-    def test_text_that_does_not_end_with_its_turn_is_rejected(self):
-        with self.assertRaises(ValueError):
-            reusable_prefix_length('{"authorized_observation":{},"zeta":1}')
+    def test_the_hold_prices_the_whole_input_cap_at_the_long_cards_cache_write_price(self):
+        self.store.reserve("game:hold", "game", self.actor, self.family, 1_024, {}, self.request["session"],
+                           self.store.message_remaining(self.actor, self.request["session"]))
+
+        self.assertEqual(self.store.call("game:hold")["reservation_nano"], 300_000 * 1_000 + 1_024 * 2_500)
 
 
 class ClaudeRewordingTests(unittest.TestCase):
@@ -314,6 +320,30 @@ class ClaudeConfigTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             Config(model=OPUS, effort="medium")
+
+    def test_a_long_prompt_card_cheaper_than_the_base_card_is_refused(self):
+        cheap = RateCard(input=50, output=2_500, cache_read=50, cache_write=1_000)
+
+        with self.assertRaises(ValueError) as caught:
+            ModelProfile(provider="anthropic", effort="xhigh", input_nano_per_token=100, output_nano_per_token=500,
+                         long_prompt_tokens=HAIKU_THRESHOLD, long_prompt_rates=cheap)
+
+        self.assertIn("long_prompt_rates must cost at least the base card", str(caught.exception))
+
+    def test_a_threshold_without_its_card_is_refused(self):
+        with self.assertRaises(ValueError):
+            ModelProfile(provider="anthropic", effort="xhigh", input_nano_per_token=100, output_nano_per_token=500,
+                         long_prompt_tokens=HAIKU_THRESHOLD)
+
+    def test_the_claude_command_requires_a_known_model(self):
+        base = ["claude", "--out", "run", "--allow-paid", "--dollar-limit", "5"]
+        with mock.patch("sys.stderr"):
+            with self.assertRaises(SystemExit):
+                build_parser().parse_args(base)
+            with self.assertRaises(SystemExit):
+                build_parser().parse_args([*base, "--model", "claude-sonnet-5-5"])
+
+        self.assertEqual(build_parser().parse_args([*base, "--model", HAIKU]).model, HAIKU)
 
 
 if __name__ == "__main__":

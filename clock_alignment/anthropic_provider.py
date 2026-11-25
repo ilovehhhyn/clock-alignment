@@ -2,11 +2,10 @@
 
 The observation text, action schema and allowances are the OpenAI path's, byte for byte; the
 system prompt is the shared one with two sentences reworded (prompts.CLAUDE_REWORDING). The
-observation text is sent as two text blocks, split just before its "turn" key: the first block
-ends in a 5-minute cache breakpoint, so a re-prompt or Storyteller check of the same request reads
-everything but the turn from Anthropic's prompt cache. Joined, the blocks are exactly the shared
-text. Replies are normalized into the OpenAI receipt shape before any check or settlement, and the
-store charges them at the profile's cache-aware prices.
+observation text is sent as one text block with no cache breakpoint: in the 2026-11-25 Opus attempt
+83% of input tokens were cache writes (1.25x the input price) and 8% were cache reads, so caching
+raised the input bill. Replies are normalized into the OpenAI receipt shape before any check or
+settlement, and the store charges them at the profile's rate card for the prompt's length.
 """
 import json
 import os
@@ -20,12 +19,6 @@ from .schema import request_schema
 from .store import IntegrityError, PendingCall
 
 API_KEY_ENV = "ANTHROPIC_API_KEY"
-# The cache key covers each request's own output schema, so cached text is never shared between
-# players, and one player's next request is 10 to 25 minutes away. Only a re-prompt or check of the
-# same request, sent within seconds, reads the cache; the 5-minute lifetime costs 1.25x the input
-# price to write, against 2x for one hour (smoke test, 2026-11-25).
-CACHE_CONTROL = {"type": "ephemeral"}
-TURN_KEY = ',"turn":'  # canonical() sorts keys and "turn" sorts last, so it closes the observation text
 # Structured outputs reject these JSON Schema limits; schema.validate_action enforces them after the reply.
 UNSUPPORTED_SCHEMA_KEYS = ("maxItems", "maxLength", "minimum", "maximum")
 # The SDK resends 429, 5xx and dropped connections with backoff before a call counts as failed.
@@ -83,49 +76,21 @@ def json_type(value):
     raise ValueError(f"enum value {value!r} has no JSON Schema type")
 
 
-def reusable_prefix_length(text):
-    """Return the length of the observation text before its "turn" key: what a re-prompt of the same request repeats.
-
-    A re-prompt or Storyteller check changes only the turn (its attempt number and notice); the
-    observation, lineage balance and message allowance before it stay byte for byte the same.
-    """
-    head = json.loads(text)
-    if not isinstance(head, dict) or max(head, default=None) != "turn":
-        raise ValueError("the observation text must end with its turn; the cache split assumes it")
-    prefix = canonical({key: value for key, value in head.items() if key != "turn"})[:-1]
-    if not text.startswith(prefix + TURN_KEY):
-        raise ValueError("the observation text must end with its turn; the cache split assumes it")
-    return len(prefix)
-
-
-def observation_blocks(text):
-    """Split the observation text before its turn, with a cache breakpoint on the first block."""
-    cut = reusable_prefix_length(text)
-    return [{"type": "text", "text": text[:cut], "cache_control": dict(CACHE_CONTROL)},
-            {"type": "text", "text": text[cut:]}]
-
-
 def claude_action_payload(config, request, view, allowance, displayed_balance):
     text = observation_text(request, view, allowance, displayed_balance)
     schema = claude_schema(request_schema(request["legal"], speaking=allowance.may_speak))
     return {"model": config.model, "max_tokens": allowance.output_cap,
             "system": [{"type": "text", "text": CLAUDE_SYSTEM}],
-            "messages": [{"role": "user", "content": observation_blocks(text)}],
+            "messages": [{"role": "user", "content": [{"type": "text", "text": text}]}],
             "thinking": dict(THINKING),
             "output_config": {"effort": config.effort, "format": {"type": "json_schema", "schema": schema}}}
-
-
-def joined_text(payload):
-    """Return the user turn's text as the model reads it: its blocks joined in order."""
-    return "".join(block["text"] for block in payload["messages"][0]["content"])
 
 
 def require_payload_contract(config, payload):
     messages = payload.get("messages")
     content = messages[0].get("content") if isinstance(messages, list) and len(messages) == 1 else None
-    blocks_ok = (isinstance(content, list) and len(content) == 2
-                 and all(block.get("type") == "text" and isinstance(block.get("text"), str) for block in content)
-                 and content[0].get("cache_control") == CACHE_CONTROL and "cache_control" not in content[1])
+    blocks_ok = (isinstance(content, list) and len(content) == 1 and set(content[0]) == {"type", "text"}
+                 and content[0]["type"] == "text" and isinstance(content[0]["text"], str))
     output = payload.get("output_config", {})
     if (set(payload) != {"model", "max_tokens", *COUNTED_FIELDS} or payload["model"] != config.model
             or payload["system"] != [{"type": "text", "text": CLAUDE_SYSTEM}]

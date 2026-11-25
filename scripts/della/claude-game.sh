@@ -1,7 +1,7 @@
 #!/bin/bash
 # Supervise one paid Claude game on the Della login node, resuming after transport outages, until it ends.
 #
-# Usage (detached, from the repository): ( nohup bash scripts/della/claude-game.sh RUN_DIR DOLLAR_LIMIT > /dev/null 2>&1 < /dev/null & )
+# Usage (detached, from the repository): ( nohup bash scripts/della/claude-game.sh RUN_DIR DOLLAR_LIMIT MODEL > /dev/null 2>&1 < /dev/null & )
 # Compute nodes cannot reach api.anthropic.com, so the game runs on the login node; it is one light
 # Python process that mostly waits on HTTPS. The API key is read from an owner-only file into the
 # environment, never into an argument. Writes RUN_DIR/supervisor.pid ("pid host") and RUN_DIR/supervisor.log.
@@ -10,18 +10,30 @@
 set -euo pipefail
 RUN_DIR=${1:?run directory}
 DOLLAR_LIMIT=${2:?dollar ceiling for this run}
+MODEL=${3:?Claude model: claude-haiku-5-5 or claude-opus-5-5}
 case "$RUN_DIR" in /*) ;; *) echo "RUN_DIR must be an absolute path, got $RUN_DIR"; exit 2 ;; esac
 ROOT=/scratch/gpfs/ARORA/hh9077
 REPO=$ROOT/clock-alignment
 PY=$ROOT/envs/anthropic/bin/python
 KEY_FILE=$ROOT/.secrets/anthropic_api_key
 SEED=7
-MAX_INPUT_TOKENS=124000      # as in games 4 to 6
+# A prompt over the input cap stops the run (nothing is ever cut from a prompt), so the cap only has
+# to sit above the longest prompt. First-cycle estimates are dollars for night 1 and day 1.
+case "$MODEL" in
+  claude-opus-5-5)
+    MAX_INPUT_TOKENS=124000      # as in games 4 to 6
+    FIRST_CYCLE_ESTIMATE=28 ;;   # the paused 2026-11-25 attempt's night 1 and day 1 measured about $27
+  claude-haiku-5-5)
+    # Game 6's longest prompt (91,337 Qwen tokens) is about 150,000 Claude tokens at the 1.64 ratio
+    # measured over the first 112 calls; 300,000 leaves room for longer notes and later days.
+    MAX_INPUT_TOKENS=300000
+    FIRST_CYCLE_ESTIMATE=1 ;;    # $0.43 estimated from game 6's prompt sizes, rounded up to whole dollars
+  *) echo "unknown MODEL $MODEL; use claude-haiku-5-5 or claude-opus-5-5"; exit 2 ;;
+esac
 MAX_OUTPUT_TOKENS=20480      # 5 x the 4,096 of earlier games (Helen, 2026-11-25); thinking counts toward it
 FAMILY_TOKENS=327680         # 5 x the 65,536 of games 4 to 6, because thinking now counts against it
 MAX_PAID_CALLS=10000         # above what the dollar ceiling buys, so dollars bind
 TIMEOUT_SECONDS=900          # one xhigh reply can think for several minutes
-FIRST_CYCLE_ESTIMATE=28      # dollars; the paused 2026-11-25 attempt's night 1 and day 1 measured about $27
 MAX_RESTARTS=6               # transport outages the supervisor rides out before it stops
 RESTART_WAIT_SECONDS=600
 
@@ -45,9 +57,9 @@ restarts=0
 while true; do
   RESUME=()
   if [ -f "$RUN_DIR/experiment.sqlite" ]; then RESUME=(--resume); fi
-  log "starting runner ${RESUME[*]:-(new game)} with a \$$DOLLAR_LIMIT ceiling"
+  log "starting $MODEL runner ${RESUME[*]:-(new game)} with a \$$DOLLAR_LIMIT ceiling"
   set +e
-  "$PY" -m clock_alignment claude --out "$RUN_DIR" --seed "$SEED" --allow-paid --dollar-limit "$DOLLAR_LIMIT" \
+  "$PY" -m clock_alignment claude --model "$MODEL" --out "$RUN_DIR" --seed "$SEED" --allow-paid --dollar-limit "$DOLLAR_LIMIT" \
     --max-input-tokens "$MAX_INPUT_TOKENS" --max-output-tokens "$MAX_OUTPUT_TOKENS" --family-tokens "$FAMILY_TOKENS" \
     --max-paid-calls "$MAX_PAID_CALLS" --timeout-seconds "$TIMEOUT_SECONDS" \
     --first-cycle-estimate "$FIRST_CYCLE_ESTIMATE" "${RESUME[@]}" >> "$RUN_DIR/runner.out" 2>&1

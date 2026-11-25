@@ -318,8 +318,8 @@ class Store:
             if profile.provider != "vllm" and rows[0] >= config.max_paid_calls:
                 raise BudgetLimit("Overall generation-call cap reached")
             # The hold covers the dearest way the input can be billed, so one call never outruns it.
-            input_rate = max(profile.input_nano_per_token, profile.cache_write_nano_per_token or 0)
-            reservation = config.max_input_tokens * input_rate + output_cap * profile.output_nano_per_token
+            card = profile.rates(config.max_input_tokens)
+            reservation = config.max_input_tokens * max(card.input, card.cache_write) + output_cap * card.output
             if rows[1] + reservation > config.dollar_limit * NANODOLLARS:
                 raise BudgetLimit("Overall dollar ceiling reached")
             if scope == "game":
@@ -366,11 +366,11 @@ class Store:
             valid = valid and cache_split is not None
             if valid:
                 cached, written = cache_split
-                # charge = fresh * input + cache reads * read + cache writes * write + output * output
-                charge = ((ni - cached - written) * profile.input_nano_per_token
-                          + cached * (profile.cache_read_nano_per_token or 0)
-                          + written * (profile.cache_write_nano_per_token or 0)
-                          + no * profile.output_nano_per_token)
+                # charge = fresh * input + cache reads * read + cache writes * write + output * output,
+                # all at the card for the whole prompt's length (fresh + reads + writes = ni)
+                card = profile.rates(ni)
+                charge = ((ni - cached - written) * card.input + cached * card.cache_read
+                          + written * card.cache_write + no * card.output)
                 self.db.execute("UPDATE calls SET status='completed',response_json=?,input_tokens=?,output_tokens=?,"
                                 "reasoning_tokens=?,charge_nano=?,elapsed=? WHERE id=?",
                                 (canonical(response), ni, no, nr, charge, elapsed, call_id))

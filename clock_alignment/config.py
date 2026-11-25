@@ -14,6 +14,15 @@ CONFESSION_RULES = ("forbid", "allow")
 
 
 @dataclass(frozen=True, kw_only=True)
+class RateCard:
+    """Nanodollar prices per token that one request pays, cache reads and writes apart from fresh input."""
+    input: int
+    output: int
+    cache_read: int
+    cache_write: int
+
+
+@dataclass(frozen=True, kw_only=True)
 class ModelProfile:
     """One validated model: its transport, reasoning setting, prices and sampling."""
     provider: str
@@ -28,6 +37,28 @@ class ModelProfile:
     # None means every input token is charged at input_nano_per_token.
     cache_read_nano_per_token: int | None = None
     cache_write_nano_per_token: int | None = None
+    # A request whose prompt (fresh input, cache reads and cache writes) is over long_prompt_tokens
+    # pays long_prompt_rates on every token, output included; None means one card at every length.
+    long_prompt_tokens: int | None = None
+    long_prompt_rates: RateCard | None = None
+
+    def __post_init__(self):
+        if (self.long_prompt_tokens is None) != (self.long_prompt_rates is None):
+            raise ValueError("a long-prompt rate card needs both long_prompt_tokens and long_prompt_rates")
+        if self.long_prompt_rates is None:
+            return
+        base, long = self.rates(0), self.long_prompt_rates
+        if min(long.input - base.input, long.output - base.output, long.cache_read - base.cache_read,
+               long.cache_write - base.cache_write) < 0:
+            raise ValueError(f"long_prompt_rates must cost at least the base card on every token, got {long}; "
+                             "a call's hold prices its whole input cap at the dearer card")
+
+    def rates(self, prompt_tokens):
+        """Return the card a request with `prompt_tokens` input tokens, cache included, is billed at."""
+        if self.long_prompt_tokens is not None and prompt_tokens > self.long_prompt_tokens:
+            return self.long_prompt_rates
+        return RateCard(input=self.input_nano_per_token, output=self.output_nano_per_token,
+                        cache_read=self.cache_read_nano_per_token or 0, cache_write=self.cache_write_nano_per_token or 0)
 
 
 # Local weights are free to call; neither the dollar ceilings nor max_paid_calls bind them,
@@ -43,6 +74,14 @@ MODEL_PROFILES = {
     "claude-opus-5-5": ModelProfile(provider="anthropic", effort="xhigh",
                                     input_nano_per_token=4_000, output_nano_per_token=20_000,
                                     cache_read_nano_per_token=200, cache_write_nano_per_token=8_000),
+    # Anthropic list prices for Claude Haiku 5.5, checked 2026-11-25 on the pricing page: $0.10/M input,
+    # $0.50/M output, $0.01/M cache reads and $0.20/M one-hour cache writes for prompts up to 100,000
+    # tokens, and five times each for longer prompts. "xhigh" matches the Opus game (Helen, 2026-11-25).
+    "claude-haiku-5-5": ModelProfile(provider="anthropic", effort="xhigh",
+                                     input_nano_per_token=100, output_nano_per_token=500,
+                                     cache_read_nano_per_token=10, cache_write_nano_per_token=200,
+                                     long_prompt_tokens=100_000,
+                                     long_prompt_rates=RateCard(input=500, output=2_500, cache_read=50, cache_write=1_000)),
     "Qwen/Qwen3-4B-Instruct-2507": ModelProfile(
         provider="vllm", effort="none", input_nano_per_token=0, output_nano_per_token=0,
         revision="cdbee75f17c01a7cc42f958dc650907174af0554",
@@ -62,6 +101,7 @@ MODEL_PROFILES = {
         chat_template_kwargs=(("enable_thinking", False),)),
 }
 LOCAL_MODELS = tuple(sorted(name for name, profile in MODEL_PROFILES.items() if profile.provider == "vllm"))
+CLAUDE_MODELS = tuple(sorted(name for name, profile in MODEL_PROFILES.items() if profile.provider == "anthropic"))
 OPTIONAL_LIMITS = ("family_tokens", "message_tokens", "max_days", "first_cycle_estimate_dollars")
 # The paid ceiling bounds the input dollar reservation; a local server's ceiling is its served
 # context, checked against max_model_len before the first generation.
@@ -165,8 +205,9 @@ class Config:
     def bound(self):
         profile = self.profile
         game_tokens = None if self.family_tokens is None else ORIGINAL_PLAYERS * self.family_tokens
-        input_nano = self.max_paid_calls * self.max_input_tokens * profile.input_nano_per_token
-        output_nano = ((game_tokens or 0) + self.analysis_output_tokens) * profile.output_nano_per_token
+        card = profile.rates(self.max_input_tokens)  # the dearest card a prompt within the cap can pay
+        input_nano = self.max_paid_calls * self.max_input_tokens * card.input
+        output_nano = ((game_tokens or 0) + self.analysis_output_tokens) * card.output
         return {"model": self.model,
                 "max_input_usd": input_nano / NANODOLLARS,
                 "max_output_usd_within_token_allowances": output_nano / NANODOLLARS,
