@@ -38,6 +38,35 @@ class ChainJobsTests(unittest.TestCase):
                                 ("17249990", "COMPLETED", 45 * 60 + 9)])
 
 
+class ChainLogsTests(unittest.TestCase):
+    def test_only_logs_of_the_chain_ids_are_scanned_so_an_earlier_runs_failed_link_is_ignored(self):
+        # Witness: game 6's first probes flagged game 5's ca-pilot-17304551.out ("runner exit code 1").
+        with tempfile.TemporaryDirectory() as local:
+            root = Path(local)
+            (root / "logs").mkdir()
+            (root / "chain.txt").write_text("17416750\n17416751\n")
+            (root / "logs" / "ca-pilot-17304551.out").write_text("runner exit code 1\n")
+            (root / "logs" / "ca-pilot-17416750.out").write_text("vLLM healthy after 336 s\n")
+            logs = probe.chain_logs(root)
+        self.assertEqual([path.name for path in logs], ["ca-pilot-17416750.out"])
+
+    def test_no_chain_file_means_no_log_is_scanned(self):
+        with tempfile.TemporaryDirectory() as local:
+            root = Path(local)
+            (root / "logs").mkdir()
+            (root / "logs" / "ca-pilot-17304551.out").write_text("runner exit code 1\n")
+            self.assertEqual(probe.chain_logs(root), [])
+
+
+class TransportTests(unittest.TestCase):
+    def test_rsync_uses_the_same_non_interactive_ssh_options_as_remote_commands(self):
+        # Witness: on 2026-11-13 a probe hung for five hours on a links rsync after the shared connection
+        # lapsed mid-probe, because plain rsync ssh waited on a sign-in prompt.
+        transport = probe.RSYNC[probe.RSYNC.index("-e") + 1]
+        self.assertIn("BatchMode=yes", transport)
+        self.assertIn("ConnectTimeout=", transport)
+
+
 class UnreachableTests(unittest.TestCase):
     # Invariant: a failed login-node command stops the probe before any sync or report, so stale data is never shown as fresh.
     def test_the_ssh_failure_text_marks_the_login_node_unreachable(self):

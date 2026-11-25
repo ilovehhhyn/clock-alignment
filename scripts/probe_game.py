@@ -36,8 +36,10 @@ PYTHON = f"{ROOT}/envs/vllm/bin/python"
 BACKUP = ("import sqlite3, sys; src = sqlite3.connect(sys.argv[1]); dst = sqlite3.connect(sys.argv[2]); "
           "src.backup(dst); dst.close(); src.close()")
 SSH_OPTIONS = ("-o", "ConnectTimeout=25", "-o", "BatchMode=yes")
-# Times and compression only: the local copy keeps the scratch directory's own permissions.
-RSYNC = ("rsync", "-rtz")
+# Times and compression only: the local copy keeps the scratch directory's own permissions. The transport
+# carries the same ssh options as `remote`, so a connection that lapses mid-probe fails at once instead of
+# waiting on a sign-in prompt that nobody will answer.
+RSYNC = ("rsync", "-rtz", "-e", " ".join(("ssh", *SSH_OPTIONS)))
 
 
 def remote(host, command, timeout_s=120):
@@ -163,16 +165,27 @@ def slurm_seconds(text):
     return seconds + (int(days) if days else 0) * 24 * 3600
 
 
+def chain_ids(local):
+    """Return the job ids in the run's chain.txt, or an empty set before the first link is submitted."""
+    chain_file = local / "chain.txt"
+    return set(chain_file.read_text().split()) if chain_file.exists() else set()
+
+
 def chain_jobs(queue_text, local):
     """Return (job id, state, elapsed seconds) for this game's links, the ids listed in the run's chain.txt."""
-    chain_file = local / "chain.txt"
-    ids = set(chain_file.read_text().split()) if chain_file.exists() else set()
+    ids = chain_ids(local)
     jobs = []
     for line in queue_text.splitlines():
         parts = line.split()
         if len(parts) >= 4 and parts[1] == "ca-pilot" and parts[0] in ids:
             jobs.append((parts[0], parts[2], slurm_seconds(parts[3])))
     return jobs
+
+
+def chain_logs(local):
+    """Return only this run's link logs, ca-pilot-<id>.out for the chain ids: the logs directory holds every run's."""
+    ids = chain_ids(local)
+    return sorted(path for path in (local / "logs").glob("ca-pilot-*.out") if path.stem.removeprefix("ca-pilot-") in ids)
 
 
 def stalled(running_seconds, idle_seconds, requests_unchanged):
@@ -211,7 +224,7 @@ def harness_report(local, summary, checks, confessions, queue_text):
     for job, state, _ in links:
         if state.startswith(DEAD_JOB_STATES):
             failures.append(f"link job {job} is {state}")
-    for log in sorted((local / "logs").glob("ca-pilot-*.out")) + sorted((local / "links").glob("*/vllm.log")):
+    for log in chain_logs(local) + sorted((local / "links").glob("*/vllm.log")):
         text = log.read_text(errors="replace")
         if "Traceback" in text or "IntegrityError" in text or re.search(r"runner exit code [1-9]", text):
             failures.append(f"{log.name} reports an error")
