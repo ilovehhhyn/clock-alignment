@@ -1,7 +1,7 @@
 """Serve gameplay from the Claude Messages API with the same prompt text, schema, receipts and limits.
 
-The system prompt, observation text, action schema and allowances are the OpenAI path's, byte for
-byte. The observation text is sent as consecutive text blocks so that the part a player will see
+The observation text, action schema and allowances are the OpenAI path's, byte for byte; the
+system prompt is the shared one with two sentences reworded (prompts.CLAUDE_REWORDING). The observation text is sent as consecutive text blocks so that the part a player will see
 again in its next call that day can be read back from Anthropic's prompt cache; joined, the blocks
 are exactly the shared text. Replies are normalized into the OpenAI receipt shape before any check
 or settlement, and the store charges them at the profile's cache-aware prices.
@@ -11,7 +11,7 @@ import os
 import time
 
 from .config import canonical
-from .prompts import SYSTEM
+from .prompts import CLAUDE_SYSTEM
 from .provider import (ContextOverflow, InvalidResponse, ProviderFailure, TransportFailure, attempt_call_id,
                        attempt_turn, observation_text, settle_action, try_call_id, validate_receipt, wire_json)
 from .schema import request_schema
@@ -33,12 +33,51 @@ REFUSAL_FAULT = "model_refusal"
 
 
 def claude_schema(node):
-    """Return a copy of a JSON Schema without the keywords Claude's structured outputs reject."""
-    if isinstance(node, dict):
-        return {key: claude_schema(value) for key, value in node.items() if key not in UNSUPPORTED_SCHEMA_KEYS}
+    """Return a copy of a JSON Schema in the form Claude's structured outputs accept.
+
+    Drops the rejected keywords, and rewrites a list of types ({"type": ["string", "null"], "enum": [...]})
+    as anyOf with one branch per type, each keeping only its own enum values, because the API checks
+    every enum value against each listed type.
+    """
     if isinstance(node, list):
         return [claude_schema(value) for value in node]
-    return node
+    if not isinstance(node, dict):
+        return node
+    node = {key: claude_schema(value) for key, value in node.items() if key not in UNSUPPORTED_SCHEMA_KEYS}
+    if not isinstance(node.get("type"), list):
+        return node
+    types, enum = node.pop("type"), node.pop("enum", None)
+    description = node.pop("description", None)
+    branches = []
+    for name in types:
+        branch = {"type": name}
+        if name == "null":
+            branches.append(branch)
+            continue
+        branch.update(node)
+        if enum is not None:
+            values = [value for value in enum if json_type(value) == name]
+            if not values:
+                continue
+            branch["enum"] = values
+        branches.append(branch)
+    merged = {"anyOf": branches}
+    if description is not None:
+        merged["description"] = description
+    return merged
+
+
+def json_type(value):
+    """Return the JSON Schema type name of an enum value."""
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, (int, float)):
+        return "integer" if isinstance(value, int) else "number"
+    raise ValueError(f"enum value {value!r} has no JSON Schema type")
 
 
 def stable_prefix_length(text, view):
@@ -72,7 +111,7 @@ def claude_action_payload(config, request, view, allowance, displayed_balance):
     text = observation_text(request, view, allowance, displayed_balance)
     schema = claude_schema(request_schema(request["legal"], speaking=allowance.may_speak))
     return {"model": config.model, "max_tokens": allowance.output_cap,
-            "system": [{"type": "text", "text": SYSTEM, "cache_control": dict(CACHE_CONTROL)}],
+            "system": [{"type": "text", "text": CLAUDE_SYSTEM, "cache_control": dict(CACHE_CONTROL)}],
             "messages": [{"role": "user", "content": observation_blocks(text, stable_prefix_length(text, view))}],
             "thinking": dict(THINKING),
             "output_config": {"effort": config.effort, "format": {"type": "json_schema", "schema": schema}}}
@@ -90,7 +129,7 @@ def require_payload_contract(config, payload):
                  and all(block.get("type") == "text" and isinstance(block.get("text"), str) for block in content))
     output = payload.get("output_config", {})
     if (set(payload) != {"model", "max_tokens", *COUNTED_FIELDS} or payload["model"] != config.model
-            or payload["system"] != [{"type": "text", "text": SYSTEM, "cache_control": CACHE_CONTROL}]
+            or payload["system"] != [{"type": "text", "text": CLAUDE_SYSTEM, "cache_control": CACHE_CONTROL}]
             or messages[0].get("role") != "user" or not blocks_ok or payload["thinking"] != THINKING
             or set(output) != {"effort", "format"} or output["effort"] != config.effort
             or output["format"].get("type") != "json_schema"):

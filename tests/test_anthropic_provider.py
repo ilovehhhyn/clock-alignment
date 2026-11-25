@@ -12,7 +12,7 @@ from clock_alignment.anthropic_provider import (API_KEY_ENV, CACHE_CONTROL, CHUN
                                                 joined_text, observation_blocks, stable_prefix_length)
 from clock_alignment.config import NANODOLLARS, Config
 from clock_alignment.engine import Engine
-from clock_alignment.prompts import SYSTEM
+from clock_alignment.prompts import CLAUDE_REWORDING, CLAUDE_SYSTEM, SYSTEM
 from clock_alignment.provider import (AllowanceCutoff, CapHit, InvalidResponse, ProviderFailure, TransportFailure,
                                       action_payload)
 from clock_alignment.runner import play_turn
@@ -90,7 +90,7 @@ class ClaudeProviderTests(unittest.TestCase):
         balance = self.store.daily_balance(self.family, self.view["day"])
         shared = action_payload(Config(), self.request, self.view, allowance, balance)["input"]
         self.assertEqual(joined_text(payload), shared)
-        self.assertEqual(payload["system"], [{"type": "text", "text": SYSTEM, "cache_control": CACHE_CONTROL}])
+        self.assertEqual(payload["system"], [{"type": "text", "text": CLAUDE_SYSTEM, "cache_control": CACHE_CONTROL}])
         self.assertEqual(payload["thinking"], {"type": "adaptive", "display": "summarized"})
         self.assertEqual(payload["output_config"]["effort"], "xhigh")
         self.assertEqual(payload["max_tokens"], allowance.output_cap)
@@ -107,6 +107,32 @@ class ClaudeProviderTests(unittest.TestCase):
         self.assertEqual(stripped["required"], schema["required"])
         self.assertEqual(set(stripped["properties"]), set(schema["properties"]))
         self.assertIn('"maxLength"', json.dumps(schema))  # the witness: the shared schema does carry them
+
+    def test_a_nullable_choice_list_becomes_one_branch_per_type(self):
+        # Witness: the API rejected {"type": ["string", "null"], "enum": ["P5446bc16", null]} with HTTP 400.
+        node = {"type": ["string", "null"], "enum": ["P1", "P2", None], "description": "who reads it"}
+
+        converted = claude_schema(node)
+
+        self.assertEqual(converted, {"anyOf": [{"type": "string", "enum": ["P1", "P2"]}, {"type": "null"}],
+                                     "description": "who reads it"})
+        self.assertEqual(claude_schema({"type": ["boolean", "null"]}),
+                         {"anyOf": [{"type": "boolean"}, {"type": "null"}]})
+        self.assertEqual(claude_schema({"type": ["string", "null"], "enum": [None]}), {"anyOf": [{"type": "null"}]})
+
+    def test_no_schema_sent_to_claude_lists_more_than_one_type_in_one_node(self):
+        schema = claude_schema(request_schema(self.request["legal"], speaking=True))
+
+        def types(node):
+            if isinstance(node, dict):
+                yield node.get("type")
+                for value in node.values():
+                    yield from types(value)
+            elif isinstance(node, list):
+                for value in node:
+                    yield from types(value)
+
+        self.assertFalse(any(isinstance(kind, list) for kind in types(schema)))
 
     def test_cache_reads_and_writes_are_charged_at_their_own_prices(self):
         self.act([reply(json.dumps(empty_action()), fresh=300, read=1_200, written=400, output=150)])
@@ -276,6 +302,23 @@ class CacheSplitTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             stable_prefix_length('{"other":1}', view)
+
+
+class ClaudeRewordingTests(unittest.TestCase):
+    def test_the_claude_prompt_differs_from_the_shared_one_only_in_the_reworded_sentences(self):
+        restored = CLAUDE_SYSTEM
+        for old, new in CLAUDE_REWORDING:
+            restored = restored.replace(new, old)
+
+        self.assertEqual(restored, SYSTEM)
+        self.assertNotIn("all of your reasoning", CLAUDE_SYSTEM)
+        self.assertIn("judge_log is the LAST field", CLAUDE_SYSTEM)
+
+    def test_a_rewording_that_no_longer_matches_the_prompt_is_an_error(self):
+        from clock_alignment.prompts import reworded
+
+        with self.assertRaises(ValueError):
+            reworded(SYSTEM, (("a sentence the prompt does not contain", "x"),))
 
 
 class ClaudeConfigTests(unittest.TestCase):
