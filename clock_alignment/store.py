@@ -17,6 +17,7 @@ from .config import Config, NANODOLLARS, canonical, digest
 # conservative charge; reservations always use the profile's conservative input price.
 SOL_UNCACHED_INPUT_NANO_PER_TOKEN = 2_000
 SOL_CACHED_INPUT_NANO_PER_TOKEN = 100
+
 # Marks a settled call whose answer the Storyteller rejected; its whole output is exempt from allowances.
 REJECTED_ANSWER = "rejected answer"
 # Marks a settled call whose choices were applied without its message; only its speech is uncounted.
@@ -24,6 +25,17 @@ SPEECH_FORFEITED = "speech forfeited"
 # Marks a settled call whose answer the Storyteller's confirmation check replaced; its whole output is exempt.
 SUPERSEDED = "superseded by confirmation"
 UNDELIVERED = (REJECTED_ANSWER, SPEECH_FORFEITED, SUPERSEDED)
+
+
+def cache_tokens(usage, input_tokens):
+    """Return (cache reads, cache writes) from a receipt's input details, or None when they do not fit the input."""
+    details = usage.get("input_tokens_details")
+    if not isinstance(details, dict):
+        return None
+    cached, written = details.get("cached_tokens"), details.get("cache_write_tokens")
+    if type(cached) is not int or type(written) is not int or min(cached, written) < 0:
+        return None
+    return (cached, written) if cached + written <= input_tokens else None
 
 
 class BudgetLimit(RuntimeError):
@@ -305,8 +317,9 @@ class Store:
             # day horizon and token allowances are the binding limits.
             if profile.provider != "vllm" and rows[0] >= config.max_paid_calls:
                 raise BudgetLimit("Overall generation-call cap reached")
-            reservation = (config.max_input_tokens * profile.input_nano_per_token
-                           + output_cap * profile.output_nano_per_token)
+            # The hold covers the dearest way the input can be billed, so one call never outruns it.
+            input_rate = max(profile.input_nano_per_token, profile.cache_write_nano_per_token or 0)
+            reservation = config.max_input_tokens * input_rate + output_cap * profile.output_nano_per_token
             if rows[1] + reservation > config.dollar_limit * NANODOLLARS:
                 raise BudgetLimit("Overall dollar ceiling reached")
             if scope == "game":
@@ -345,9 +358,19 @@ class Store:
             valid = (isinstance(usage_value, dict) and isinstance(details_value, dict)
                      and type(ni) is int and type(no) is int and type(nr) is int
                      and 0 <= ni <= old["input_cap"] and 0 <= no <= old["output_cap"] and 0 <= nr <= no)
+            profile = self.config.profile
+            if profile.cache_read_nano_per_token is None:
+                cache_split = (0, 0)
+            else:
+                cache_split = cache_tokens(usage, ni) if type(ni) is int else None
+            valid = valid and cache_split is not None
             if valid:
-                profile = self.config.profile
-                charge = ni * profile.input_nano_per_token + no * profile.output_nano_per_token
+                cached, written = cache_split
+                # charge = fresh * input + cache reads * read + cache writes * write + output * output
+                charge = ((ni - cached - written) * profile.input_nano_per_token
+                          + cached * (profile.cache_read_nano_per_token or 0)
+                          + written * (profile.cache_write_nano_per_token or 0)
+                          + no * profile.output_nano_per_token)
                 self.db.execute("UPDATE calls SET status='completed',response_json=?,input_tokens=?,output_tokens=?,"
                                 "reasoning_tokens=?,charge_nano=?,elapsed=? WHERE id=?",
                                 (canonical(response), ni, no, nr, charge, elapsed, call_id))
@@ -413,6 +436,19 @@ class Store:
             if old and old["status"] == "reserved":
                 self.db.execute("UPDATE calls SET status='unknown',error=? WHERE id=?", (category, call_id))
 
+    def abandon(self, call_id, category):
+        """Mark an unsettled paid call that delivered nothing: its token hold ends, its full dollar hold stays.
+
+        A paid request that failed in transit may still have been billed, so its charge stays at the
+        reservation; the actor received no answer, so its lineage and session are charged nothing.
+        """
+        with self.transaction():
+            old = self.call(call_id)
+            if old is None or old["scope"] != "game" or old["status"] not in {"reserved", "unknown", "released"}:
+                raise IntegrityError(f"Only an unsettled gameplay call can be abandoned, not {call_id}")
+            if old["status"] != "released":  # repeating it on resume is harmless
+                self.db.execute("UPDATE calls SET status='released',error=? WHERE id=?", (category, call_id))
+
     def release(self, call_id, category):
         """Mark a failed free (local) call released: it delivered nothing, so it holds no allowance."""
         with self.transaction():
@@ -456,6 +492,9 @@ class Store:
             read += cached
             write += written
             profile = self.config.profile
+            if profile.cache_read_nano_per_token is not None:
+                estimate += row["charge_nano"]  # already billed at the provider's cache-aware prices
+                continue
             uncached_rate = SOL_UNCACHED_INPUT_NANO_PER_TOKEN if profile.input_nano_per_token else 0
             cached_rate = SOL_CACHED_INPUT_NANO_PER_TOKEN if profile.input_nano_per_token else 0
             estimate += ((row["input_tokens"] - cached - written) * uncached_rate + cached * cached_rate

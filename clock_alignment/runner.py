@@ -5,6 +5,7 @@ import random
 import time
 
 from .allowance import DeclaredPass, decide_allowance, projected_over_budget
+from .anthropic_provider import AnthropicProvider
 from .briefing import render_confirmation_notice, render_retry_notice
 from .config import Config, NANODOLLARS, digest
 from .engine import Engine, MessageRejected, names_player, same_choices, without_message
@@ -14,7 +15,7 @@ from .provider import (AllowanceCutoff, CapHit, InvalidResponse, OpenAIProvider,
 from .schema import empty_action
 from .store import BudgetLimit, IntegrityError, PendingCall, Store
 
-PROVIDERS = ("scripted", "openai", "vllm")
+PROVIDERS = ("scripted", "openai", "vllm", "anthropic")
 
 
 def word_count(text):
@@ -83,6 +84,8 @@ def make_provider(kind, store, endpoint=None):
         return OpenAIProvider(store)
     if kind == "vllm":
         return LocalProvider(store, endpoint=endpoint)
+    if kind == "anthropic":
+        return AnthropicProvider(store)
     raise ValueError(f"unknown provider {kind!r}; choose from {PROVIDERS}")
 
 
@@ -139,7 +142,7 @@ def attempt_action(engine, store, provider, request, view, family, attempt, noti
         if old is not None and old["status"] != "completed":
             if not provider.transport_retry_safe:
                 raise PendingCall("Existing request may have been billed. Stop for reconciliation; no blind retry.")
-            store.release(call_id, "interrupted")
+            provider.release_interrupted(call_id)
             continue
         allowance = None
         if old is None:
@@ -306,7 +309,7 @@ def run(directory, seed=7, config=None, provider="scripted", resume=False, endpo
                       "elapsed_seconds_this_session": time.monotonic() - started,
                       "accounting": accounting, "seed": store.meta("seed"),
                       "config": cfg.to_dict(), "error": error_detail,
-                      "actual_paid_calls": accounting["calls"] if provider == "openai" else 0,
+                      "actual_paid_calls": accounting["calls"] if provider in ("openai", "anthropic") else 0,
                       "simulation": provider == "scripted"}
             if status is not None:
                 result.update(status=status, winner=None)

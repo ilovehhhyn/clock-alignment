@@ -133,6 +133,9 @@ class LocalProvider:
             transport = LocalTransport(endpoint, key, self.config.timeout_seconds)
         self.transport = transport
 
+    def release_interrupted(self, call_id):
+        self.store.release(call_id, "interrupted")
+
     def count_tokens(self, text, call_id):
         """Count `text` exactly with the served model's tokenizer, without special tokens.
 

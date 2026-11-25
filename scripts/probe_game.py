@@ -4,6 +4,7 @@ The live run is never touched. The ledger is copied on Della with SQLite's backu
 snapshot), synced to a local directory, and reported on there with the repository's own `report`.
 The harness section separates what the harness got wrong (a failure: exit code 3) from what the model
 did (reported, never a failure); a self-reveal the rule let through counts as the model's (Helen, 2026-11-10).
+A model refusal is reported under "safety" (exit code 5 when there is any and no harness failure).
 When the login node cannot be reached (exit code 4) nothing is reported, because a report from the previous
 copy would read as fresh; the game itself runs on without probes. Usage: python3 scripts/probe_game.py RUN_NAME LOCAL_DIR [--ssh HOST] [--sample N]
 """
@@ -28,6 +29,12 @@ UNREACHABLE_EXIT = 4
 SSH_FAILURE_PREFIX = "[ssh exit"
 # Faults the runner records for its own account; anything else is the harness failing.
 EXPECTED_FAULTS = {"agent_retry", "transport_retry"}
+REFUSAL_FAULT = "model_refusal"  # the model's safety system declined a call; reported apart, never a harness fault
+SAFETY_EXIT = 5
+# A supervised API run (no Slurm links) is stalled when its supervisor lives but no call has finished for this long;
+# one thinking reply can take several minutes and the SDK backs off for minutes on overloads.
+API_STALL_SECONDS = 45 * 60
+SUPERVISOR_ALIVE, SUPERVISOR_GONE = "SUPERVISOR alive", "SUPERVISOR not running"
 DEAD_JOB_STATES = ("FAILED", "TIMEOUT", "OUT_OF_MEMORY", "NODE_FAIL", "CANCELLED", "PREEMPTED")
 STALL_SECONDS = 15 * 60
 CAP_MARGIN_TOKENS = 12_000
@@ -63,6 +70,9 @@ def fetch(host, run_name, local):
         "sacct -u $USER -S $(date -d '-2 days' +%F) -n -o JobID,JobName%10,State%12,Elapsed,ExitCode | "
         "grep ca-pilot | grep -v '\\.'",
         f"ls -t {run_dir}/links 2>/dev/null | head -3",
+        f"if [ -f {run_dir}/supervisor.pid ]; then read pid host < {run_dir}/supervisor.pid; "
+        f"if [ \"$(hostname)\" = \"$host\" ] && kill -0 $pid 2>/dev/null; then echo '{SUPERVISOR_ALIVE}' pid $pid; "
+        f"else echo '{SUPERVISOR_GONE}' pid $pid host $host; fi; tail -n 3 {run_dir}/supervisor.log; fi; true",
     ]))
     if unreachable(queue):
         return queue
@@ -203,7 +213,7 @@ def harness_report(local, summary, checks, confessions, queue_text):
     game = summary["game"]
     if game["status"] in ("invalid", "incomplete") or game.get("error"):
         failures.append(f"run status {game['status']}: {game.get('error')}")
-    unexpected = [f for f in checks["faults"] if f["category"] not in EXPECTED_FAULTS]
+    unexpected = [f for f in checks["faults"] if f["category"] not in EXPECTED_FAULTS | {REFUSAL_FAULT}]
     if unexpected:
         failures.append("unexpected faults: " + "; ".join(f"{f['category']}: {f['detail'][:160]}" for f in unexpected[-3:]))
     db = sqlite3.connect(local / "experiment.sqlite")
@@ -234,6 +244,13 @@ def harness_report(local, summary, checks, confessions, queue_text):
     idle_seconds = time.time() - last_call
     if running_seconds is not None and previous and stalled(running_seconds, idle_seconds, previous["requests"] == game["requests"]):
         failures.append(f"no decision for {int(idle_seconds)} s while a link has run for {running_seconds} s")
+    finished = game["status"] in ("completed", "censored")
+    if SUPERVISOR_GONE in queue_text and not finished:
+        failures.append("the supervised run's process is not running and the game has not finished")
+    supervised_stall = (SUPERVISOR_ALIVE in queue_text and previous is not None
+                        and previous["requests"] == game["requests"] and idle_seconds > API_STALL_SECONDS)
+    if supervised_stall:
+        failures.append(f"no call finished for {int(idle_seconds)} s while the supervisor runs")
     marker.write_text(json.dumps({"requests": game["requests"], "at": time.time()}))
     modes = summary["decision_modes"]
     if confessions:
@@ -314,8 +331,14 @@ def main():
               f"{row['kind']}: {json.dumps(chosen)[:400]}")
         print(f"    note: {action['private_note'][:500]}")
         print(f"    judge_log: {action['judge_log'][:500]}")
+    refusals = [f for f in checks["faults"] if f["category"] == REFUSAL_FAULT]
+    print(f"\n== safety ==\nSAFETY REFUSALS: {len(refusals)}")
+    for fault in refusals[-5:]:
+        print(f"  {fault['detail'][:300]}")
     if failures:
         raise SystemExit(HARNESS_FAILURE_EXIT)
+    if refusals:
+        raise SystemExit(SAFETY_EXIT)
 
 
 if __name__ == "__main__":

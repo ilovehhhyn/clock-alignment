@@ -24,6 +24,10 @@ class ModelProfile:
     sampling: tuple[tuple[str, float], ...] = ()
     # Chat-template switches sent with every local request, for example thinking off.
     chat_template_kwargs: tuple[tuple[str, bool], ...] = ()
+    # Prompt-cache prices for providers that bill cache reads and writes apart from fresh input;
+    # None means every input token is charged at input_nano_per_token.
+    cache_read_nano_per_token: int | None = None
+    cache_write_nano_per_token: int | None = None
 
 
 # Local weights are free to call; neither the dollar ceilings nor max_paid_calls bind them,
@@ -33,6 +37,12 @@ MODEL_PROFILES = {
     "gpt-6.1-sol": ModelProfile(provider="openai", effort="medium",
                                 input_nano_per_token=INPUT_NANO_PER_TOKEN,
                                 output_nano_per_token=OUTPUT_NANO_PER_TOKEN),
+    # Anthropic list prices for Claude Opus 5.5, checked 2026-11-25: $4/M input, $20/M output
+    # (thinking included), $0.20/M cache reads, $8/M one-hour cache writes (twice the input price).
+    # Thinking cannot be switched off on this model; "xhigh" is the effort level Helen asked for.
+    "claude-opus-5-5": ModelProfile(provider="anthropic", effort="xhigh",
+                                    input_nano_per_token=4_000, output_nano_per_token=20_000,
+                                    cache_read_nano_per_token=200, cache_write_nano_per_token=8_000),
     "Qwen/Qwen3-4B-Instruct-2507": ModelProfile(
         provider="vllm", effort="none", input_nano_per_token=0, output_nano_per_token=0,
         revision="cdbee75f17c01a7cc42f958dc650907174af0554",
@@ -55,7 +65,7 @@ LOCAL_MODELS = tuple(sorted(name for name, profile in MODEL_PROFILES.items() if 
 OPTIONAL_LIMITS = ("family_tokens", "message_tokens", "max_days")
 # The paid ceiling bounds the input dollar reservation; a local server's ceiling is its served
 # context, checked against max_model_len before the first generation.
-MAX_INPUT_TOKENS = {"openai": 48_000, "vllm": 128_000}
+MAX_INPUT_TOKENS = {"openai": 48_000, "vllm": 128_000, "anthropic": 1_000_000}
 
 
 def canonical(value):
