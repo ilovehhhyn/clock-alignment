@@ -5,8 +5,9 @@ import socket
 import tempfile
 import unittest
 
+from clock_alignment.allowance import projected_over_budget
 from clock_alignment.briefing import LABELS
-from clock_alignment.config import Config
+from clock_alignment.config import NANODOLLARS, Config
 from clock_alignment.engine import Engine, neutral_action
 from clock_alignment.local_provider import LocalProvider
 from clock_alignment.provider import OpenAIProvider, ProviderFailure, attempt_call_id, wire_json
@@ -241,6 +242,46 @@ class PaidWireAndHorizonTests(unittest.TestCase):
         declare_final_day_if_due(engine, store)
 
         self.assertIsNone(engine.final_day)
+
+    def test_a_ceiling_that_cannot_pay_two_estimated_cycles_makes_day_one_final(self):
+        # Witness: the Claude game's first cycle cost about $28 against a $49 gameplay ceiling, and the
+        # old rule waited for day 2 and then declared final the day it expected to overspend.
+        engine, store = self.fresh_game(Config(game_dollar_limit=49, first_cycle_estimate_dollars=28))
+
+        declare_final_day_if_due(engine, store)
+
+        self.assertEqual(engine.final_day, 1)
+
+    def test_a_ceiling_that_pays_two_estimated_cycles_leaves_day_one_open(self):
+        engine, store = self.fresh_game(Config(game_dollar_limit=49, first_cycle_estimate_dollars=19))
+
+        declare_final_day_if_due(engine, store)
+
+        self.assertIsNone(engine.final_day)
+
+    def test_without_a_first_cycle_estimate_day_one_is_never_declared_final(self):
+        engine, store = self.fresh_game(Config(game_dollar_limit=1))
+
+        declare_final_day_if_due(engine, store)
+
+        self.assertIsNone(engine.final_day)
+
+    def test_a_day_is_final_when_it_and_one_more_cycle_would_pass_the_ceiling(self):
+        config = Config(game_dollar_limit=10)
+
+        # spend + this + next (150% of this): 2 + 3 + 4.5 = 9.5 fits $10; 3 + 3 + 4.5 = 10.5 does not.
+        fits = projected_over_budget(game_spend_nano=2 * NANODOLLARS, cycle_estimate_nano=3 * NANODOLLARS, config=config)
+        passes = projected_over_budget(game_spend_nano=3 * NANODOLLARS, cycle_estimate_nano=3 * NANODOLLARS, config=config)
+        unknown = projected_over_budget(game_spend_nano=99 * NANODOLLARS, cycle_estimate_nano=None, config=config)
+
+        self.assertEqual((fits, passes, unknown), (False, True, False))
+
+    def fresh_game(self, config):
+        engine = Engine(config.to_dict(), seed=4)
+        store = Store(self.temp.name)
+        self.addCleanup(store.close)
+        store.initialize(config, 4, engine, "openai")
+        return engine, store
 
     def test_only_a_zero_cost_call_can_release_its_hold(self):
         config = Config()

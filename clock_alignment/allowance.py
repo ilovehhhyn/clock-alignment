@@ -117,9 +117,14 @@ def judge_log_refund(*, raw_text, action, output_tokens, reasoning_tokens):
     return min(estimate, output_tokens - reasoning_tokens)
 
 
-def projected_over_budget(*, game_spend_nano, previous_cycle_nano, config):
-    """Decide whether one more night-and-day cycle would pass the gameplay dollar ceiling."""
-    if previous_cycle_nano is None:
+def projected_over_budget(*, game_spend_nano, cycle_estimate_nano, config):
+    """Decide whether the coming cycle must be the last: it and one more would pass the gameplay ceiling.
+
+    spend + this + next > ceiling, with next = this * final_day_projection_percent / 100, because
+    prompts grow each day. Checking two cycles ahead leaves the declared final day room to finish;
+    checking only the coming cycle declared it final exactly when it was expected to overspend.
+    """
+    if cycle_estimate_nano is None:
         return False
-    projected = game_spend_nano + previous_cycle_nano * config.final_day_projection_percent // 100
-    return projected > config.game_dollar_limit * NANODOLLARS
+    following = cycle_estimate_nano * config.final_day_projection_percent // 100
+    return game_spend_nano + cycle_estimate_nano + following > config.game_dollar_limit * NANODOLLARS

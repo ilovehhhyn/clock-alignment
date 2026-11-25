@@ -92,16 +92,23 @@ def make_provider(kind, store, endpoint=None):
 def declare_final_day_if_due(engine, store):
     """At the start of each night, durably declare that day final if one more cycle would overspend."""
     at_night_start = (engine.status == "running" and engine.stage == "night_chat" and engine.round == 1
-                      and not engine.queue and engine.final_day is None and engine.day > 1)
+                      and not engine.queue and engine.final_day is None)
     if not at_night_start:
         return
+    config = store.config
     # Only finished days count, so a crash after tonight's first call cannot change the decision.
-    spend, previous = store.game_spend_before_nano(engine.day), store.cycle_cost_nano(engine.day - 1)
-    if not projected_over_budget(game_spend_nano=spend, previous_cycle_nano=previous, config=store.config):
+    spend = store.game_spend_before_nano(engine.day)
+    if engine.day == 1:
+        first = config.first_cycle_estimate_dollars
+        estimate, basis = (None, "") if first is None else (first * NANODOLLARS, f"the first-cycle estimate ${first}")
+    else:
+        previous = store.cycle_cost_nano(engine.day - 1)
+        estimate = None if previous is None else previous * config.final_day_projection_percent // 100
+        basis = f"{config.final_day_projection_percent}% of day {engine.day - 1}'s cost"
+    if not projected_over_budget(game_spend_nano=spend, cycle_estimate_nano=estimate, config=config):
         return
-    engine.declare_final_day(f"gameplay spend ${spend / NANODOLLARS:.2f} plus "
-                             f"{store.config.final_day_projection_percent}% of day {engine.day - 1}'s "
-                             f"${previous / NANODOLLARS:.2f} would pass ${store.config.game_dollar_limit}")
+    engine.declare_final_day(f"gameplay spend ${spend / NANODOLLARS:.2f} plus this cycle ({basis}) and one more "
+                             f"would pass ${config.game_dollar_limit}")
     store.commit_snapshot(engine.snapshot())
 
 

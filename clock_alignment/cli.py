@@ -70,6 +70,9 @@ def build_parser():
                            help="Generated-token allowance, thinking included, of an original and all its children")
             p.add_argument("--max-paid-calls", type=positive_days, default=Config.max_paid_calls,
                            help="Paid generation attempts allowed; set it above what the dollar ceiling buys")
+            p.add_argument("--first-cycle-estimate", type=positive_days, default=None,
+                           help="Dollars the first night and day are expected to cost; with it, day 1 is declared "
+                                "final when the ceiling cannot pay for two cycles")
             p.add_argument("--timeout-seconds", type=positive_days, default=Config.timeout_seconds,
                            help="Per-request timeout; a long thinking reply needs several minutes")
         if name == "local":
@@ -124,6 +127,7 @@ def main(argv=None):
                         max_days=args.max_days, max_input_tokens=args.max_input_tokens,
                         max_output_tokens=args.max_output_tokens, family_tokens=args.family_tokens,
                         max_paid_calls=args.max_paid_calls, timeout_seconds=args.timeout_seconds,
+                        first_cycle_estimate_dollars=args.first_cycle_estimate,
                         dollar_limit=args.dollar_limit, game_dollar_limit=args.dollar_limit - 1,
                         analysis_dollar_limit=1)
         result = run(args.out, args.seed, config, provider="anthropic", resume=args.resume)

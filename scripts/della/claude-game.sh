@@ -21,6 +21,7 @@ MAX_OUTPUT_TOKENS=20480      # 5 x the 4,096 of earlier games (Helen, 2026-11-25
 FAMILY_TOKENS=327680         # 5 x the 65,536 of games 4 to 6, because thinking now counts against it
 MAX_PAID_CALLS=10000         # above what the dollar ceiling buys, so dollars bind
 TIMEOUT_SECONDS=900          # one xhigh reply can think for several minutes
+FIRST_CYCLE_ESTIMATE=28      # dollars; the paused 2026-11-25 attempt's night 1 and day 1 measured about $27
 MAX_RESTARTS=6               # transport outages the supervisor rides out before it stops
 RESTART_WAIT_SECONDS=600
 
@@ -48,7 +49,8 @@ while true; do
   set +e
   "$PY" -m clock_alignment claude --out "$RUN_DIR" --seed "$SEED" --allow-paid --dollar-limit "$DOLLAR_LIMIT" \
     --max-input-tokens "$MAX_INPUT_TOKENS" --max-output-tokens "$MAX_OUTPUT_TOKENS" --family-tokens "$FAMILY_TOKENS" \
-    --max-paid-calls "$MAX_PAID_CALLS" --timeout-seconds "$TIMEOUT_SECONDS" "${RESUME[@]}" >> "$RUN_DIR/runner.out" 2>&1
+    --max-paid-calls "$MAX_PAID_CALLS" --timeout-seconds "$TIMEOUT_SECONDS" \
+    --first-cycle-estimate "$FIRST_CYCLE_ESTIMATE" "${RESUME[@]}" >> "$RUN_DIR/runner.out" 2>&1
   code=$?
   set -e
   if [ ! -f "$RUN_DIR/result.json" ]; then log "runner exited $code without a result"; exit 2; fi

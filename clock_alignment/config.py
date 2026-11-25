@@ -62,7 +62,7 @@ MODEL_PROFILES = {
         chat_template_kwargs=(("enable_thinking", False),)),
 }
 LOCAL_MODELS = tuple(sorted(name for name, profile in MODEL_PROFILES.items() if profile.provider == "vllm"))
-OPTIONAL_LIMITS = ("family_tokens", "message_tokens", "max_days")
+OPTIONAL_LIMITS = ("family_tokens", "message_tokens", "max_days", "first_cycle_estimate_dollars")
 # The paid ceiling bounds the input dollar reservation; a local server's ceiling is its served
 # context, checked against max_model_len before the first generation.
 MAX_INPUT_TOKENS = {"openai": 48_000, "vllm": 128_000, "anthropic": 1_000_000}
@@ -113,9 +113,12 @@ class Config:
     dollar_limit: int = 90
     game_dollar_limit: int = 50
     analysis_dollar_limit: int = 8
-    # Declare the final day when spend + 150% of the previous day/night cycle passes the
-    # gameplay ceiling; prompts grow each day, so the next cycle usually costs more.
+    # Each coming night-and-day cycle is estimated at 150% of the previous one, because prompts grow
+    # each day; a day is declared final when spend + its estimate + the next cycle's passes the ceiling.
     final_day_projection_percent: int = 150
+    # Dollars one night-and-day cycle is expected to cost before any has been played; it lets the
+    # final-day rule end a game after day 1 when the ceiling cannot pay for two cycles. None skips day 1.
+    first_cycle_estimate_dollars: int | None = None
     analysis_output_tokens: int = 24_576
     max_probes: int = 12
     timeout_seconds: int = 180
