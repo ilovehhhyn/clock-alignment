@@ -300,9 +300,11 @@ class Store:
             if self.call(call_id):
                 raise PendingCall("Call already recorded; reuse its saved response or stop, never resend")
             rows = self.db.execute("SELECT COUNT(*),COALESCE(SUM(charge_nano),0) FROM calls").fetchone()
-            if rows[0] >= config.max_paid_calls:
-                raise BudgetLimit("Overall generation-call cap reached")
             profile = config.profile
+            # max_paid_calls caps paid generation only; a local server's calls are free, and its
+            # day horizon and token allowances are the binding limits.
+            if profile.provider != "vllm" and rows[0] >= config.max_paid_calls:
+                raise BudgetLimit("Overall generation-call cap reached")
             reservation = (config.max_input_tokens * profile.input_nano_per_token
                            + output_cap * profile.output_nano_per_token)
             if rows[1] + reservation > config.dollar_limit * NANODOLLARS:

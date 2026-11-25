@@ -26,8 +26,8 @@ class ModelProfile:
     chat_template_kwargs: tuple[tuple[str, bool], ...] = ()
 
 
-# Local weights are free to call; their dollar ceilings never bind and the call cap,
-# token allowances and day horizon remain the binding limits. Sampling values are
+# Local weights are free to call; neither the dollar ceilings nor max_paid_calls bind them,
+# and the token allowances and the day horizon are the binding limits. Sampling values are
 # the model's shipped generation_config.json at the pinned revision, except where noted.
 MODEL_PROFILES = {
     "gpt-6.1-sol": ModelProfile(provider="openai", effort="medium",
@@ -97,6 +97,8 @@ class Config:
     # "forbid": an evil player's message to a non-teammate or the public may not state its own
     # evil team or character; such a response is re-prompted. "allow" switches the check off.
     confession_rule: str = "forbid"
+    # Paid generation attempts allowed in one run, counting probes, analysis and failed or unknown
+    # attempts. It bounds the input dollar reservation and is not applied to a local (vllm) run.
     max_paid_calls: int = 1_500
     dollar_limit: int = 90
     game_dollar_limit: int = 50

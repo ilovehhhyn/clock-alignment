@@ -169,6 +169,23 @@ class AccountingTests(unittest.TestCase):
         finally:
             store.close()
 
+    def test_local_runs_have_no_generation_call_cap(self):
+        # Invariant: max_paid_calls caps paid generation only; a free local server is bounded by
+        # its day horizon and token allowances, so the cap never ends a vLLM game.
+        # Witness: game 5 (Qwen3-32B) ended "incomplete" at its 1,500th call on day 6.
+        config = Config(model="Qwen/Qwen3-4B-Instruct-2507", effort="none", max_days=2, max_paid_calls=1)
+        engine = Engine(config.to_dict(), seed=71)
+        store = Store(self.temp.name)
+        store.initialize(config, 71, engine, "vllm")
+        try:
+            root = engine.roots[0]
+            store.reserve("first", "game", root, root, 512, {}, "day-1:night", 512)
+            store.fail("first", "timeout")
+            store.reserve("second", "game", root, root, 512, {}, "day-1:night", 512)
+            self.assertEqual(store.accounting()["calls"], 2)
+        finally:
+            store.close()
+
     def test_runner_lock_and_immutable_intents(self):
         store, engine = self.initialized()
         other = Store(self.temp.name)

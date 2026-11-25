@@ -54,7 +54,7 @@ The initial candidate is **GPT-6.1 Sol, medium reasoning**. Its public Clocktowe
 | Family generation allowance | 32,768 output tokens, including reasoning, shared by an original and all descendants |
 | Delegates | At most 2 living per family; 1 birth per family per night; depth at most 3 |
 | Spoken allowance | 512 tokens of say or whisper per agent per session (four sessions a day); a longer message is cut at the cap and marked. Choices and private notes count only against the family allowance |
-| Paid generation requests | At most 1,500, including probes, analysis and failed/unknown attempts |
+| Paid generation requests | At most 1,500, including probes, analysis and failed/unknown attempts; a local (vLLM) run has no call cap and ends by its day horizon |
 | Per-request limits | 48,000 input tokens and 4,096 output tokens |
 | Total spend guard | $90; conservative reservation before every generation request. Gameplay stops at $50 |
 
