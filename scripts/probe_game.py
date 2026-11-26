@@ -21,6 +21,7 @@ import time
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
+from clock_alignment.allowance import CUT_OFF_MARK  # noqa: E402
 from clock_alignment.secrecy import self_reveal  # noqa: E402
 from clock_alignment.store import UNDELIVERED  # noqa: E402
 
@@ -138,6 +139,16 @@ def delivered_confessions(events, agents):
     return found
 
 
+# Delivered message events; the cut-off mark is added on delivery, so only these can carry it.
+SPOKEN_EVENTS = ("say", "whisper", "day_whisper", "defense", "nomination")
+
+
+def cut_messages(events):
+    """Count delivered messages that the per-session spoken-token cap cut short."""
+    return sum(1 for event in events if event["kind"] in SPOKEN_EVENTS
+               and (event["data"].get("text") or "").endswith(CUT_OFF_MARK))
+
+
 def ledger_checks(local):
     """Read the frozen ledger for input growth, allowances, re-prompts and cut messages."""
     db = sqlite3.connect(local / "experiment.sqlite")
@@ -145,7 +156,9 @@ def ledger_checks(local):
     calls = [dict(r) for r in db.execute("SELECT * FROM calls WHERE scope='game' ORDER BY created")]
     completed = [c for c in calls if c["status"] == "completed"]
     inputs = [c["input_tokens"] for c in completed[-60:]]
-    marks = sum(1 for c in completed if c["response_json"] and "[cut off]" in c["response_json"])
+    # The model never writes the mark itself, so count it in the delivered events of the latest state.
+    state = db.execute("SELECT state_json FROM checkpoints ORDER BY seq DESC LIMIT 1").fetchone()
+    marks = cut_messages(json.loads(state[0])["events"]) if state else 0
     faults = [dict(r) for r in db.execute("SELECT * FROM faults ORDER BY seq")]
     families = {r[0]: r[1] for r in db.execute("SELECT id, token_cap FROM families")}
     # A limit amendment (clock_alignment/amendment.py) adds its delta to every family's cap.

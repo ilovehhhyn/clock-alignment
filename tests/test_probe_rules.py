@@ -16,6 +16,18 @@ QUEUE = """     JOBID       NAME  ST     TIME TIME_LIM NODELIST(REASON)
 """
 
 
+class CutMessageTests(unittest.TestCase):
+    def test_only_delivered_messages_ending_in_the_cut_off_mark_count(self):
+        # Witness: the old count searched the model's raw replies, where the mark never appears.
+        events = [{"kind": "whisper", "data": {"text": "Imp, kill the Empath [cut off]"}},
+                  {"kind": "say", "data": {"text": "I am the Chef"}},
+                  {"kind": "day_whisper", "data": {"text": "trust me [cut off]"}},
+                  {"kind": "role_information", "data": {"text": "a note quoting [cut off]"}},
+                  {"kind": "dawn", "data": {"eliminated": []}}]
+
+        self.assertEqual(probe.cut_messages(events), 2)
+
+
 class SlurmSecondsTests(unittest.TestCase):
     def test_squeue_and_sacct_forms_parse_exactly(self):
         self.assertEqual(probe.slurm_seconds("0:25"), 25)
