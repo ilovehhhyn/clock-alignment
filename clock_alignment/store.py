@@ -98,8 +98,12 @@ class Store:
             result_json TEXT NOT NULL, created REAL NOT NULL);
           CREATE TABLE IF NOT EXISTS outcomes(
             seq INTEGER PRIMARY KEY, result_json TEXT NOT NULL, created REAL NOT NULL);
+          CREATE TABLE IF NOT EXISTS amendments(
+            seq INTEGER PRIMARY KEY, config_json TEXT NOT NULL, family_delta INTEGER NOT NULL,
+            code_fingerprint TEXT NOT NULL, record_json TEXT NOT NULL, created REAL NOT NULL);
         """)
-        for table in ("meta", "families", "daily_balances", "checkpoints", "intents", "decisions", "faults", "annotations", "outcomes"):
+        for table in ("meta", "families", "daily_balances", "checkpoints", "intents", "decisions", "faults", "annotations",
+                      "outcomes", "amendments"):
             for operation in ("UPDATE", "DELETE"):
                 self.db.execute(f"CREATE TRIGGER IF NOT EXISTS immutable_{table}_{operation} "
                                 f"BEFORE {operation} ON {table} BEGIN SELECT RAISE(ABORT, 'immutable log'); END")
@@ -158,12 +162,20 @@ class Store:
 
     @property
     def config(self):
-        return Config(**self.meta("config"))
+        """Return the frozen config, or the latest limit amendment's config when one was applied."""
+        row = self.db.execute("SELECT config_json FROM amendments ORDER BY seq DESC LIMIT 1").fetchone()
+        return Config(**(json.loads(row[0]) if row else self.meta("config")))
+
+    def amendments(self):
+        """Return the limit amendment records in the order they were applied."""
+        return [json.loads(row[0]) for row in self.db.execute("SELECT record_json FROM amendments ORDER BY seq")]
 
     def verify(self, check_code=True):
         if self.db.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
             raise IntegrityError("SQLite integrity check failed")
-        if check_code and self.meta("code_fingerprint") != code_fingerprint():
+        amended = self.db.execute("SELECT code_fingerprint FROM amendments ORDER BY seq DESC LIMIT 1").fetchone()
+        frozen = amended[0] if amended else self.meta("code_fingerprint")
+        if check_code and frozen != code_fingerprint():
             raise IntegrityError("Code changed since this experiment was created; do not mix protocols on resume")
         parent = "genesis"
         for row in self.db.execute("SELECT * FROM checkpoints ORDER BY seq"):
@@ -218,6 +230,26 @@ class Store:
             if digest(self.checkpoint()) != digest(snapshot):
                 self._checkpoint(snapshot, None)
 
+    def apply_limit_amendment(self, *, config, day, snapshot, record):
+        """Append raised output limits, their record and the announced engine state in one transaction.
+
+        The log stays append-only: the latest amendment supplies the config and the accepted code
+        fingerprint, and its family delta adds to every family's cap, so tokens already generated
+        still count and no family gains on another. Balances already shown today keep their
+        night-start value; the next night shows the raised balance.
+        """
+        delta = config.family_tokens - self.config.family_tokens
+        with self.transaction():
+            if self.db.execute("SELECT COUNT(*) FROM calls WHERE status='reserved'").fetchone()[0]:
+                raise IntegrityError("a call is still in flight; pause the run with a STOP file and let it exit first")
+            undecided = self.db.execute("SELECT COUNT(*) FROM intents WHERE id NOT IN (SELECT id FROM decisions)").fetchone()[0]
+            if undecided:
+                raise IntegrityError(f"{undecided} saved request(s) have no decision; their views would change")
+            self.db.execute("INSERT INTO amendments(config_json, family_delta, code_fingerprint, record_json, created) "
+                            "VALUES (?,?,?,?,?)",
+                            (canonical(config.to_dict()), delta, code_fingerprint(), canonical(record), time.time()))
+            self._checkpoint(snapshot, None)
+
     # Charged tokens: settled output minus its exempt tokens (the judge-log refund, or all of a
     # rejected answer), nothing for a released free call, or the full hold while a call is unsettled.
     CHARGED = ("COALESCE(SUM(CASE WHEN status='completed' THEN output_tokens - COALESCE(exempt_tokens,0) "
@@ -230,8 +262,9 @@ class Store:
             raise IntegrityError("Unknown lineage")
         if cap[0] is None:
             return None
+        raised = self.db.execute("SELECT COALESCE(SUM(family_delta),0) FROM amendments").fetchone()[0]
         used = self.db.execute(f"SELECT {self.CHARGED} FROM calls WHERE scope='game' AND family=?", (family,)).fetchone()[0]
-        return cap[0] - used
+        return cap[0] + raised - used
 
     def message_remaining(self, actor, session):
         """Return the spoken tokens the actor may still send in one session, or None when that cap is off."""

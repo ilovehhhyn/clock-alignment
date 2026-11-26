@@ -471,6 +471,13 @@ class Engine:
         self.final_day = self.day
         self._emit("final_day_decision", {"day": self.day, "reason": reason}, [])
 
+    def amend_output_limits(self, *, max_output_tokens, family_tokens, text):
+        """Raise the per-answer and family output limits mid-game and tell every player in one public event."""
+        if self.status != "running":
+            raise ValueError(f"output limits can only change while the game is running, not {self.status!r}")
+        self.config = {**self.config, "max_output_tokens": max_output_tokens, "family_tokens": family_tokens}
+        self._emit("storyteller_announcement", {"text": text})
+
     def _validate(self, request, action):
         if not isinstance(action, dict) or set(action) != ACTION_KEYS:
             raise ValueError("action must have the exact documented keys")

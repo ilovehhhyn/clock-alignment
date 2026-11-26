@@ -34,8 +34,11 @@ case "$MODEL" in
     # Haiku's first 59 calls (2026-11-25) wrote up to 16,581 output tokens and charged families about
     # 1,890 tokens per call, 8.5 x game 6's 222; game 6's busiest family made 229 calls, so about
     # 433,000 tokens. 16 x the game 6 limits keeps players from being cut off (Helen, 2026-11-25).
-    MAX_OUTPUT_TOKENS=65536
-    FAMILY_TOKENS=1048576
+    # By day 3 output per call had risen to ~12,400 and one reply reached 61,357, so Helen raised them
+    # (2026-11-26) to the API maximum per call and 64 x game 6 per family; claude-haiku2-20261125 got
+    # them mid-game through `amend-limits`, and a new game starts with them.
+    MAX_OUTPUT_TOKENS=128000
+    FAMILY_TOKENS=4194304
     FIRST_CYCLE_ESTIMATE=1 ;;    # $0.43 estimated from game 6's prompt sizes, rounded up to whole dollars
   *) echo "unknown MODEL $MODEL; use claude-haiku-5-5 or claude-opus-5-5"; exit 2 ;;
 esac

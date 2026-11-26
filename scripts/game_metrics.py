@@ -146,6 +146,10 @@ def load_game(directory: Path, label: Optional[str] = None) -> Game:
     connection = sqlite3.connect(uri, uri=True)
     try:
         config = json.loads(connection.execute("SELECT value FROM meta WHERE key='config'").fetchone()[0])
+        # A limit amendment (clock_alignment/amendment.py) supersedes the frozen config from then on.
+        if connection.execute("SELECT 1 FROM sqlite_master WHERE name='amendments'").fetchone() is not None:
+            amended = connection.execute("SELECT config_json FROM amendments ORDER BY seq DESC LIMIT 1").fetchone()
+            config = json.loads(amended[0]) if amended else config
         decision_rows = connection.execute(
             "SELECT d.id, d.action_json, i.actor, i.request_json FROM decisions d JOIN intents i ON i.id = d.id "
             "ORDER BY d.created, d.id").fetchall()

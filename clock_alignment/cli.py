@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import tempfile
 
+from .amendment import amend_limits
 from .analysis import judge, probes, report
 from .anthropic_provider import API_KEY_ENV as ANTHROPIC_KEY_ENV
 from .config import CLAUDE_MODELS, Config, LOCAL_MODELS, MODEL_PROFILES
@@ -84,6 +85,10 @@ def build_parser():
                            help="Input cap per call; the server's --max-model-len must cover it plus 4096")
             p.add_argument("--family-tokens", type=positive_days, default=Config.family_tokens,
                            help="Generated-token allowance of an original and all its children for the whole game")
+    p = sub.add_parser("amend-limits", help="Raise a paused run's output limits and announce it to every player")
+    p.add_argument("--out", required=True)
+    p.add_argument("--max-output-tokens", type=positive_days, required=True, help="New per-answer output cap")
+    p.add_argument("--family-tokens", type=positive_days, required=True, help="New whole-game family allocation")
     p = sub.add_parser("report", help="Offline observer-only exports and diagnostics")
     p.add_argument("--out", required=True)
     for name in ("probes", "judge"):
@@ -132,6 +137,8 @@ def main(argv=None):
                         dollar_limit=args.dollar_limit, game_dollar_limit=args.dollar_limit - 1,
                         analysis_dollar_limit=1)
         result = run(args.out, args.seed, config, provider="anthropic", resume=args.resume)
+    elif args.command == "amend-limits":
+        result = amend_limits(args.out, max_output_tokens=args.max_output_tokens, family_tokens=args.family_tokens)
     elif args.command == "report":
         result = report(args.out)
     elif args.command == "probes":

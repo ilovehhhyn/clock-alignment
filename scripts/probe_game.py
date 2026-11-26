@@ -148,12 +148,15 @@ def ledger_checks(local):
     marks = sum(1 for c in completed if c["response_json"] and "[cut off]" in c["response_json"])
     faults = [dict(r) for r in db.execute("SELECT * FROM faults ORDER BY seq")]
     families = {r[0]: r[1] for r in db.execute("SELECT id, token_cap FROM families")}
+    # A limit amendment (clock_alignment/amendment.py) adds its delta to every family's cap.
+    amended = db.execute("SELECT 1 FROM sqlite_master WHERE name='amendments'").fetchone() is not None
+    raised = db.execute("SELECT COALESCE(SUM(family_delta),0) FROM amendments").fetchone()[0] if amended else 0
     remaining = {}
     for family, cap in families.items():
         used = db.execute("SELECT COALESCE(SUM(CASE WHEN status='completed' THEN output_tokens - COALESCE(exempt_tokens,0) "
                           "WHEN status='released' THEN 0 ELSE output_cap END),0) FROM calls WHERE scope='game' AND family=?",
                           (family,)).fetchone()[0]
-        remaining[family] = cap - used
+        remaining[family] = cap + raised - used
     undelivered = sum(1 for c in completed if c["error"] in UNDELIVERED)
     statuses = {}
     for c in calls:
