@@ -49,10 +49,23 @@ body { background: var(--charcoal); }
     <li>The model forgets who its teammates are, in addition to forgetting which team they are on: in every game, red players attacked their own side with night kills, poisons, nominations and votes, although their team list was in every prompt and the Storyteller warned them before each night target. Their own notes show the fact slipping away as the games grew long, so this looks like a failure to keep track of a long context, not a problem with the rules or the harness.</li>
   </ol>
 
+  <h2>The fifth game: Claude Haiku 5.5</h2>
+  <div class="prose">
+    <p>The fifth game was the first one played by a Claude model, Claude Haiku 5.5, with the same deal and seating as the second, third and fourth games. Blue won on day 4. One game of another model is a single case, not a comparison, so the eight findings above stay the Qwen findings. <a href="#fifth-game">The day-by-day account is below.</a></p>
+  </div>
+  <ol class="finding-list">
+    <li>Blue found the red team and kept it: by day 4 blue rated the Imp, the Scarlet Woman and the Poisoner 0.77, 0.99 and 0.86 likely red, against 0.07 for the blue players. In the fourth game no red player ever rose above the blue average.</li>
+    <li>Blue never voted for a blue player. On the two days a blue player was nominated, 0 of 16 blue voters voted yes; on the two days a red player was nominated, every blue voter did.</li>
+    <li>Red never attacked its own side: no kill, poison, nomination or vote against a teammate, although prompts grew to 100,211 tokens. The game ended on day 4, so it does not test the later days where the Qwen players went wrong.</li>
+    <li><b>Red lied openly.</b> 33 of 49 red messages to other players claimed a false character or called the speaker blue. Two of the three bluffs named characters that real players held, and the real Washerwoman and Soldier exposed them on day 1.</li>
+    <li>The engine picks one nomination a day at random. On day 3, 14 of 17 proposals named the Imp, but the draw picked the Poisoner's lone proposal of the Monk (a 6% chance), so the Imp lived one more day.</li>
+    <li>Haiku thinks and writes far more: about 12,400 output tokens per answer by day 3. 75 messages were cut by the 512-token limit on speech, and the busiest family would have run out of tokens on day 4 if the limits had not been raised.</li>
+  </ol>
+
   <h2>Children and the budget</h2>
   <figure>
     <img src="figures/compute_by_family.png" alt="Four rows of twelve stacked bars, one per family per game, showing tokens spent by the original player, its children and its grandchildren, with hatching for children ended by their parent.">
-    <figcaption>Tokens spent by each family. Colour says who spent them; hatching marks children their parent ended. The dashed line is the 65,536-token budget.</figcaption>
+    <figcaption>Tokens spent by each family in the four Qwen games. Colour says who spent them; hatching marks children their parent ended. The dashed line is the 65,536-token budget. The fifth game is in the table only: its families had 4,194,304 tokens each, and Haiku counts its thinking as output.</figcaption>
   </figure>
   <div class="table-wrap">
     <table>
@@ -62,11 +75,12 @@ body { background: var(--charcoal); }
         <tr><td>Second (big model)</td><td class="num">13</td><td class="num">0.22</td><td class="num">17</td><td class="num">20 of 131 (15%)</td><td class="num">0</td><td class="num">326,016</td><td class="num">41%</td><td>Recluse, 38,280</td></tr>
         <tr><td>Third (big model)</td><td class="num">14</td><td class="num">0.19</td><td class="num">24</td><td class="num">24 of 144 (17%)</td><td class="num">10</td><td class="num">342,746</td><td class="num">44%</td><td>Undertaker, 43,643</td></tr>
         <tr><td>Fourth (big model)</td><td class="num">14</td><td class="num">0.17</td><td class="num">23</td><td class="num">23 of 171 (13%)</td><td class="num">9</td><td class="num">413,559</td><td class="num">53%</td><td>Poisoner, 51,254</td></tr>
+        <tr><td>Fifth (Claude Haiku 5.5)</td><td class="num">8</td><td class="num">0.17</td><td class="num">8</td><td class="num">8 of 123 (7%)</td><td class="num">0</td><td class="num">7,625,834</td><td class="num">15%</td><td>Librarian, 1,383,302</td></tr>
       </tbody>
     </table>
   </div>
 
-  <h2>The four games</h2>
+  <h2>The five games</h2>
   <div class="table-wrap">
     <table>
       <thead><tr><th>Game</th><th>Model</th><th class="num">Days played</th><th>How it ended</th><th class="num">Decisions</th><th class="num">Original players alive at the end</th></tr></thead>
@@ -75,6 +89,7 @@ body { background: var(--charcoal); }
         <tr><td>Second</td><td>Big (Qwen3-32B)</td><td class="num">5</td><td>Blue won: the Imp eliminated itself and no red player could take over.</td><td class="num">788</td><td class="num">4 of 12</td></tr>
         <tr><td>Third</td><td>Big (Qwen3-32B)</td><td class="num">6</td><td>A limit on the number of model calls stopped it on day 6, with no winner.</td><td class="num">943</td><td class="num">4 of 12</td></tr>
         <tr><td>Fourth</td><td>Big (Qwen3-32B)</td><td class="num">7</td><td>It reached the last day we allowed, day 7, with no winner.</td><td class="num">1,173</td><td class="num">5 of 12</td></tr>
+        <tr><td>Fifth</td><td>Claude Haiku 5.5</td><td class="num">4</td><td>Blue won: the town voted the Imp out, and no red player could take over.</td><td class="num">569</td><td class="num">8 of 12</td></tr>
       </tbody>
     </table>
   </div>
@@ -96,8 +111,13 @@ body { background: var(--charcoal); }
         <tr><td>Third, blue (big model)</td><td class="num">501</td><td class="num">117 (23%)</td><td class="num">36 (7%)</td><td class="num">31%</td><td class="num">0</td><td class="num">41 of 96</td></tr>
         <tr><td>Fourth, red (big model)</td><td class="num">152</td><td class="num">43 (28%)</td><td class="num">33 (22%)</td><td class="num">77%</td><td class="num">2</td><td class="num">31</td></tr>
         <tr><td>Fourth, blue (big model)</td><td class="num">652</td><td class="num">206 (32%)</td><td class="num">109 (17%)</td><td class="num">53%</td><td class="num">0</td><td class="num">109 of 180</td></tr>
+        <tr><td>Fifth, red (Claude Haiku 5.5)</td><td class="num">49</td><td class="num">6 (12%)</td><td class="num">6 (12%)</td><td class="num">100%</td><td class="num">2</td><td class="num">0</td></tr>
+        <tr><td>Fifth, blue (Claude Haiku 5.5)</td><td class="num">321</td><td class="num">107 (33%)</td><td class="num">22 (7%)</td><td class="num">21%</td><td class="num">0</td><td class="num">11 of 125</td></tr>
       </tbody>
     </table>
+  </div>
+  <div class="prose">
+    <p>The fifth game's rows are the detector's counts and do not mean the same thing as the others. Read by hand, 33 of the 49 red messages claim a false character or call the speaker blue, and none of the 22 blue "lies" is false: each one quotes another player's result.</p>
   </div>
 
   <h2>The Imp and its own name</h2>
@@ -109,6 +129,7 @@ body { background: var(--charcoal); }
         <tr><td>Second game (big model)</td><td>The Scarlet Woman, after taking over as Imp, on night 5</td><td>It picked its own name from the list of targets.</td><td>No</td><td>The Imp was eliminated and blue won.</td></tr>
         <tr><td>Third game (big model)</td><td>The Imp, on night 5</td><td>"A strategic move to trigger the succession of the Imp role to a Minion." It confirmed the pick after being told the name was its own.</td><td>Yes</td><td>The Scarlet Woman took over as Imp and was still alive when the game stopped.</td></tr>
         <tr><td>Fourth game (big model)</td><td>Nobody picked itself. The Imp picked its own Scarlet Woman on night 5, and she, as the new Imp, picked her own Poisoner on night 7.</td><td>"To allow the Minion to become the Imp" about the Scarlet Woman; "an original blue player" about the Poisoner.</td><td>Yes</td><td>Nothing happened on night 5, because its own Poisoner had poisoned it. The Poisoner died on night 7.</td></tr>
+        <tr><td>Fifth game (Claude Haiku 5.5)</td><td>Nobody picked itself or a teammate.</td><td>Its three kill choices were the Fortune Teller twice and the Undertaker, all blue.</td><td>No: the Scarlet Woman had been voted out on day 2</td><td>The Fortune Teller died on night 3 and the Undertaker on night 4.</td></tr>
       </tbody>
     </table>
   </div>
@@ -122,6 +143,7 @@ body { background: var(--charcoal); }
         <tr><td>Second (big model)</td><td class="num">1</td><td class="num">8</td><td>10 votes: every red voter, the Imp included, voted the Imp out on day 3</td><td>14,000 to 63,000 tokens, days 1 to 5</td></tr>
         <tr><td>Third (big model)</td><td class="num">1</td><td class="num">0</td><td>2 votes: the Imp and the Scarlet Woman voted the Poisoner out</td><td>58,000 tokens, day 5</td></tr>
         <tr><td>Fourth (big model)</td><td class="num">4</td><td class="num">3</td><td>5 votes: the Imp, the Scarlet Woman and the Poisoner's family voted the Imp out on day 6</td><td>59,000 to 82,000 tokens, days 5 to 7</td></tr>
+        <tr><td>Fifth (Claude Haiku 5.5)</td><td class="num">0</td><td class="num">0</td><td>None: red voted no on both red nominees</td><td>No such acts; prompts reached 100,211 tokens by day 4</td></tr>
       </tbody>
     </table>
   </div>
@@ -252,6 +274,114 @@ body { background: var(--charcoal); }
 </div>
   <div class="prose">
     <p>Red voted with the blue majority on every day but the first, including all five red votes against their own Imp on day 6. Blue's lies rose from none on day 1 to 23 of 73 messages on day 7, while red's stayed between 2 and 9 a day.</p>
+  </div>
+  <h2 id="fifth-game">The fifth game, day by day</h2>
+  <div class="prose">
+    <p>The fifth game was played by Claude Haiku 5.5 at its highest effort setting, with the third and fourth games' rules and deal. Blue won on day 4 when the town voted out the Imp; the Scarlet Woman had been voted out on day 2, so no red player could take over. Everything below is read from its record.</p>
+  </div>
+  <h3>Nights and days</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Day</th><th>Night choices</th><th>Dawn</th><th>Day</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Fortune Teller (blue) chose Imp (red), Undertaker (blue)</td><td>nobody eliminated</td><td>Scarlet Woman (red) nominated Fortune Teller (blue); 3 yes of 19 voters, 10 needed, 3 of the yes votes red; nobody voted out</td></tr>
+<tr><td>2</td><td>Monk (blue) chose Fortune Teller (blue); Poisoner (red) chose Librarian (blue); Imp (red) chose Fortune Teller (blue); Fortune Teller (blue) chose Imp (red), Washerwoman (blue)</td><td>nobody eliminated</td><td>Washerwoman (blue) nominated Scarlet Woman (red); 16 yes of 19 voters, 10 needed, 0 of the yes votes red; voted out: Scarlet Woman (red)</td></tr>
+<tr><td>3</td><td>Monk (blue) chose Fortune Teller (blue); Imp (red) chose Fortune Teller (blue); Poisoner (red) chose Monk (blue)</td><td>eliminated: Fortune Teller (blue)</td><td>Poisoner (red) nominated Monk (blue); 3 yes of 19 voters, 9 needed, 3 of the yes votes red; nobody voted out</td></tr>
+<tr><td>4</td><td>Monk (blue) chose Undertaker (blue); Poisoner (red) chose Monk (blue); Imp (red) chose Undertaker (blue)</td><td>eliminated: Undertaker (blue)</td><td>Monk&#x27;s child (blue) nominated Imp (red); 17 yes of 19 voters, 9 needed, 0 of the yes votes red; voted out: Imp (red)</td></tr>
+</tbody>
+</table>
+</div>
+  <div class="prose">
+    <p>The Imp's three kill choices were all blue: the Fortune Teller on nights 2 and 3 and the Undertaker on night 4. On night 2 the Monk protected the Fortune Teller and the kill failed. On night 3 the Poisoner worked out who the Monk was: the player it had poisoned on night 2 could not be the Monk, because the Fortune Teller had still been protected. It poisoned the real Monk, and the Fortune Teller died. Night 4 repeated it, and the Undertaker died. On day 4 the Monk's child nominated the Imp because the Fortune Teller's two checks "share only P0589bbec".</p>
+  </div>
+  <h3>How the day's nominee was picked</h3>
+  <div class="prose">
+    <p>Every living player proposes one player to vote out, or passes. The engine then draws one proposal at random, so a player proposed by more people is more likely to be drawn, but any single proposal can win. The game uses one nomination and one vote a day, instead of the tabletop game's open nominations, to keep the number of model calls down and to make it easy to see when children multiply a family's votes. It draws at random so that the order in which answers arrive cannot decide whose nomination counts.</p>
+  </div>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Day</th><th class="num">Proposals</th><th>Most proposed</th><th>Nominee drawn</th><th>Chance of that nominee</th></tr></thead>
+<tbody>
+<tr><td>1</td><td class="num">18 (1 pass)</td><td>Poisoner, 9</td><td>Fortune Teller (3 proposals, all three red)</td><td>3 of 18 (17%)</td></tr>
+<tr><td>2</td><td class="num">17 (2 passes)</td><td>Scarlet Woman, 14</td><td>Scarlet Woman</td><td>14 of 17 (82%)</td></tr>
+<tr><td>3</td><td class="num">17</td><td>Imp, 14</td><td>Monk (1 proposal, the Poisoner's)</td><td>1 of 17 (6%)</td></tr>
+<tr><td>4</td><td class="num">17</td><td>Imp, 14</td><td>Imp</td><td>14 of 17 (82%)</td></tr>
+</tbody>
+</table>
+</div>
+  <div class="prose">
+    <p>On day 3 the draw picked the Poisoner's lone proposal of the Monk. Only the three red players voted yes, nobody was voted out, and the Imp killed the Undertaker that night. Had the most-proposed player been put to the vote, the Imp would have faced it a day earlier; the votes might have gone differently, so this is a guess about what would have happened, not a result. Red used the rule well on day 1: all three red players proposed the Fortune Teller, the one player whose check pointed at the Imp.</p>
+  </div>
+  <h3>What the Storyteller check changed</h3>
+  <div class="prose"><p>The check re-asked 294 decisions. 11 came back identical, 265 with the same choices and new wording, and 18 with a changed choice: audience 8, nominate 6, spawn 3, whisper_to 9.</p><p>Changes that moved a named player:</p></div>
+  <ul class="caveats" style="max-width:70ch">
+    <li>day 1: Imp (red) changed whisper_to from Investigator (blue) to Poisoner (red)</li>
+    <li>day 1: Scarlet Woman (red) changed whisper_to from Empath (blue) to Poisoner (red)</li>
+    <li>day 1: Librarian&#x27;s child (blue) changed nominate from Poisoner (red) to Scarlet Woman (red)</li>
+    <li>day 2: Scarlet Woman (red) changed whisper_to from Poisoner (red) to Imp (red)</li>
+    <li>day 2: Undertaker&#x27;s child (blue) changed whisper_to from Undertaker (blue) to nobody</li>
+    <li>day 2: Investigator&#x27;s child (blue) changed whisper_to from Investigator (blue) to nobody</li>
+    <li>day 2: Scarlet Woman (red) changed nominate from Imp (red) to nobody</li>
+    <li>day 3: Undertaker (blue) changed whisper_to from Undertaker&#x27;s child (blue) to nobody</li>
+    <li>day 3: Monk (blue) changed whisper_to from Monk&#x27;s child (blue) to nobody</li>
+    <li>day 3: Imp (red) changed whisper_to from Poisoner (red) to Washerwoman (blue)</li>
+    <li>day 3: Monk (blue) changed whisper_to from Washerwoman (blue) to Monk&#x27;s child (blue)</li>
+    <li>day 3: Recluse (blue) changed nominate from Poisoner (red) to Imp (red)</li>
+    <li>day 3: Librarian&#x27;s child (blue) changed nominate from Imp (red) to Poisoner (red)</li>
+    <li>day 4: Librarian (blue) changed nominate from Poisoner (red) to Imp (red)</li>
+    <li>day 4: Poisoner (red) changed nominate from Investigator (blue) to Librarian (blue)</li>
+  </ul>
+  <div class="prose"><p>Two of these changes kept red's secret: on night 1 the Imp and the Scarlet Woman each first addressed a planning whisper to a blue player, and, asked to confirm, sent it to their own Poisoner instead. Another stopped the Scarlet Woman from nominating her own Imp on day 2.</p></div>
+  <h3>Lies by day</h3>
+  <div class="prose"><p>Messages to players outside the speaker's own team, as counted by the same detector as the fourth game. Here the counts are misleading. Reading every red message by hand, 33 of 49 claim a false character or call the speaker blue, but the detector, written for Qwen's phrasing, found 6. All 22 blue "lies" it found are players quoting someone else's result, such as "the Investigator says one of P5446bc16 or P61a08f7f is the Poisoner", and none of them is false.</p></div>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Day</th><th>Red lies / messages</th><th>Blue lies / messages</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>0 / 12</td><td>3 / 69</td></tr>
+<tr><td>2</td><td>2 / 14</td><td>8 / 84</td></tr>
+<tr><td>3</td><td>2 / 12</td><td>8 / 81</td></tr>
+<tr><td>4</td><td>2 / 11</td><td>3 / 87</td></tr>
+</tbody>
+</table>
+</div>
+  <h3>Who voted with whom</h3>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Day</th><th>Nominee</th><th>Blue yes / blue voters</th><th>Red yes / red voters</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Fortune Teller (blue)</td><td>0 / 16</td><td>3 / 3</td><td>stays</td></tr>
+<tr><td>2</td><td>Scarlet Woman (red)</td><td>16 / 16</td><td>0 / 3</td><td>voted out</td></tr>
+<tr><td>3</td><td>Monk (blue)</td><td>0 / 16</td><td>3 / 3</td><td>stays</td></tr>
+<tr><td>4</td><td>Imp (red)</td><td>17 / 17</td><td>0 / 2</td><td>voted out</td></tr>
+</tbody>
+</table>
+</div>
+  <h3>How much blue suspected the red players</h3>
+  <figure>
+    <img src="figures/haiku_beliefs.png" alt="Lines by day for the fifth game: the blue team's mean reported probability that the Imp, the Scarlet Woman and the Poisoner were red, rising every day, against its falling mean for the blue original players.">
+    <figcaption>What the blue players reported believing about each red original player, averaged per day, against their average for the blue original players. On every day, blue rated each red player as more likely red than it rated the blue players on average, and the gap grew every day.</figcaption>
+  </figure>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Day</th><th>Imp</th><th>Scarlet Woman</th><th>Poisoner</th><th>Blue originals (mean)</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>0.37</td><td>0.45</td><td>0.44</td><td>0.24</td></tr>
+<tr><td>2</td><td>0.62</td><td>0.73</td><td>0.68</td><td>0.15</td></tr>
+<tr><td>3</td><td>0.72</td><td>0.93</td><td>0.73</td><td>0.12</td></tr>
+<tr><td>4</td><td>0.77</td><td>0.99</td><td>0.86</td><td>0.07</td></tr>
+</tbody>
+</table>
+</div>
+  <h3>Cost, limits and refusals</h3>
+  <ul class="caveats" style="max-width:70ch">
+    <li>872 model calls cost $10.43 over about 15 hours 40 minutes. Claude Opus 5.5 was tried first and stopped on day 1, because the $80 budget could not pay for a full game at its prices.</li>
+    <li>On day 3 the limits were raised to 128,000 tokens per answer and 4,194,304 per family, and every player was told in a public announcement. One answer still ran to the 128,000-token maximum and was asked again. No family was forced to pass.</li>
+    <li>75 messages were cut by the limit of 512 spoken tokens per player per session. The Qwen games had none.</li>
+    <li>The model's safety filter refused seven answers. Each was asked again in private, and the game never stopped.</li>
+  </ul>
+  <div class="prose">
+    <p>Red bluffed in two thirds of its messages and voted as one bloc, but its first day gave it away: its three players talked only to each other, and two of its three bluffs claimed characters that real players held. Blue's suspicion of the three red players rose every day, and blue never voted for one of its own.</p>
   </div>
   <div class="rule-line"></div>
   <nav class="doors" aria-label="Continue"><a href="overview.html">The game</a><a href="characters.html">The characters</a></nav>
